@@ -1,3 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
@@ -8,11 +10,11 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type PetType = "dog" | "cat";
-type PetGender = "male" | "female";
+import AppButton from "../components/AppButton";
+import SectionCard from "../components/SectionCard";
+import { COLORS } from "../constants/colors";
+import type { PetGender, PetType } from "../types";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 
@@ -153,6 +155,7 @@ function SelectorModal({
           >
             {options.map((option) => {
               const isSelected = selectedValue === option;
+
               return (
                 <Pressable
                   key={String(option)}
@@ -178,9 +181,7 @@ function SelectorModal({
             })}
           </ScrollView>
 
-          <Pressable style={styles.modalCloseButton} onPress={onClose}>
-            <Text style={styles.modalCloseButtonText}>닫기</Text>
-          </Pressable>
+          <AppButton title="닫기" onPress={onClose} />
         </View>
       </View>
     </Modal>
@@ -414,6 +415,7 @@ export default function HomeScreen() {
           <View style={styles.heroBadge}>
             <Text style={styles.heroBadgeText}>MVP</Text>
           </View>
+
           <Text style={styles.heroTitle}>멍냥사주 🐾</Text>
           <Text style={styles.heroSubtitle}>
             우리 아이의 오늘 기분, 식욕, 건강운을 가볍고 재미있게 확인해보세요.
@@ -432,16 +434,13 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.topMenuRow}>
-          <Pressable
-            style={styles.topMenuButton}
-            onPress={() => router.push("/history")}
-          >
-            <Text style={styles.topMenuButtonText}>운세 기록 보기</Text>
-          </Pressable>
-        </View>
+        <AppButton
+          title="운세 기록 보기"
+          onPress={() => router.push("/history")}
+          variant="outline"
+        />
 
-        <View style={styles.card}>
+        <SectionCard>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>우리 아이 등록</Text>
             <Text style={styles.sectionCaption}>
@@ -573,6 +572,7 @@ export default function HomeScreen() {
           <View style={styles.chipWrap}>
             {breedOptions.map((breed) => {
               const active = selectedBreed === breed;
+
               return (
                 <Pressable
                   key={breed}
@@ -710,17 +710,20 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.formButtonRow}>
-            <Pressable style={styles.submitButton} onPress={handleGoResult}>
-              <Text style={styles.submitButtonText}>운세 보러 가기</Text>
-            </Pressable>
-
-            <Pressable style={styles.resetButton} onPress={resetForm}>
-              <Text style={styles.resetButtonText}>입력 초기화</Text>
-            </Pressable>
+            <View style={styles.formButtonHalf}>
+              <AppButton title="운세 보러 가기" onPress={handleGoResult} />
+            </View>
+            <View style={styles.formButtonHalf}>
+              <AppButton
+                title="입력 초기화"
+                onPress={resetForm}
+                variant="outline"
+              />
+            </View>
           </View>
-        </View>
+        </SectionCard>
 
-        <View style={styles.card}>
+        <SectionCard>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>등록된 우리 아이</Text>
             <Text style={styles.sectionCaption}>
@@ -747,6 +750,7 @@ export default function HomeScreen() {
                       <Text style={styles.savedPetName}>
                         {emoji} {pet.petName}
                       </Text>
+
                       <View style={styles.savedPetTypeBadge}>
                         <Text style={styles.savedPetTypeBadgeText}>
                           {typeLabel}
@@ -764,25 +768,26 @@ export default function HomeScreen() {
                   </Pressable>
 
                   <View style={styles.savedPetActions}>
-                    <Pressable
-                      style={styles.smallEditButton}
-                      onPress={() => handleEditSavedPet(pet)}
-                    >
-                      <Text style={styles.smallEditButtonText}>수정</Text>
-                    </Pressable>
+                    <View style={styles.actionHalf}>
+                      <AppButton
+                        title="수정"
+                        onPress={() => handleEditSavedPet(pet)}
+                        variant="secondary"
+                      />
+                    </View>
 
-                    <Pressable
-                      style={styles.smallDeleteButton}
-                      onPress={() => handleDeleteSavedPet(pet.id)}
-                    >
-                      <Text style={styles.smallDeleteButtonText}>삭제</Text>
-                    </Pressable>
+                    <View style={styles.actionHalf}>
+                      <AppButton
+                        title="삭제"
+                        onPress={() => handleDeleteSavedPet(pet.id)}
+                      />
+                    </View>
                   </View>
                 </View>
               );
             })
           )}
-        </View>
+        </SectionCard>
       </ScrollView>
 
       <SelectorModal
@@ -841,7 +846,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#FFF9F3",
+    backgroundColor: COLORS.bg,
   },
   container: {
     padding: 20,
@@ -849,13 +854,13 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   heroCard: {
-    backgroundColor: "#2E2A27",
+    backgroundColor: COLORS.primary,
     borderRadius: 26,
     padding: 22,
   },
   heroBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#FFE9D6",
+    backgroundColor: COLORS.accentSoft,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -864,7 +869,7 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.primary,
   },
   heroTitle: {
     fontSize: 28,
@@ -894,45 +899,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  topMenuRow: {
-    flexDirection: "row",
-  },
-  topMenuButton: {
-    flex: 1,
-    backgroundColor: "#FFF0E4",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#F2C7A5",
-  },
-  topMenuButtonText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#8C5A3C",
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 16,
-  },
   sectionHeader: {
     marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   sectionCaption: {
     marginTop: 4,
     fontSize: 13,
-    color: "#8B8178",
+    color: COLORS.muted,
     lineHeight: 18,
   },
   helperText: {
     fontSize: 13,
-    color: "#8B8178",
+    color: COLORS.muted,
     lineHeight: 20,
   },
   label: {
@@ -948,7 +931,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontSize: 15,
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   extraInput: {
     marginTop: 10,
@@ -968,7 +951,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   choiceButtonActive: {
-    backgroundColor: "#F2C7A5",
+    backgroundColor: COLORS.accent,
   },
   choiceText: {
     fontSize: 15,
@@ -976,7 +959,7 @@ const styles = StyleSheet.create({
     color: "#6B625C",
   },
   choiceTextActive: {
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   chipWrap: {
     flexDirection: "row",
@@ -990,7 +973,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   breedChipActive: {
-    backgroundColor: "#F2C7A5",
+    backgroundColor: COLORS.accent,
   },
   breedChipText: {
     fontSize: 14,
@@ -998,7 +981,7 @@ const styles = StyleSheet.create({
     color: "#6B625C",
   },
   breedChipTextActive: {
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   birthRow: {
     flexDirection: "row",
@@ -1014,12 +997,12 @@ const styles = StyleSheet.create({
   dateSelectLabel: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   selectedDateText: {
     marginTop: 10,
     fontSize: 13,
-    color: "#8B8178",
+    color: COLORS.muted,
     lineHeight: 18,
   },
   formButtonRow: {
@@ -1027,34 +1010,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 22,
   },
-  submitButton: {
+  formButtonHalf: {
     flex: 1,
-    backgroundColor: "#2E2A27",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  submitButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  resetButton: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E6D9CF",
-  },
-  resetButtonText: {
-    color: "#2E2A27",
-    fontSize: 15,
-    fontWeight: "800",
   },
   savedPetCard: {
-    backgroundColor: "#FFF9F3",
+    backgroundColor: COLORS.bg,
     borderRadius: 18,
     padding: 14,
     marginTop: 10,
@@ -1070,10 +1030,10 @@ const styles = StyleSheet.create({
   savedPetName: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   savedPetTypeBadge: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1081,41 +1041,20 @@ const styles = StyleSheet.create({
   savedPetTypeBadgeText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#8C5A3C",
+    color: COLORS.secondary,
   },
   savedPetMeta: {
     marginTop: 6,
     fontSize: 13,
-    color: "#7A6F66",
+    color: COLORS.subText,
     lineHeight: 18,
   },
   savedPetActions: {
     flexDirection: "row",
     gap: 8,
   },
-  smallEditButton: {
+  actionHalf: {
     flex: 1,
-    backgroundColor: "#F2C7A5",
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  smallEditButtonText: {
-    color: "#2E2A27",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  smallDeleteButton: {
-    flex: 1,
-    backgroundColor: "#2E2A27",
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  smallDeleteButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
   },
   modalOverlay: {
     flex: 1,
@@ -1123,7 +1062,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -1132,7 +1071,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.text,
     marginBottom: 12,
   },
   modalList: {
@@ -1146,25 +1085,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modalOptionButtonActive: {
-    backgroundColor: "#F2C7A5",
+    backgroundColor: COLORS.accent,
   },
   modalOptionText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   modalOptionTextActive: {
-    color: "#2E2A27",
-  },
-  modalCloseButton: {
-    backgroundColor: "#2E2A27",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  modalCloseButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
+    color: COLORS.text,
   },
 });

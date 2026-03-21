@@ -1,3 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as MediaLibrary from "expo-media-library";
+import { router, useLocalSearchParams } from "expo-router";
+import * as Sharing from "expo-sharing";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -8,47 +12,18 @@ import {
   Text,
   View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
 import { captureRef } from "react-native-view-shot";
-import * as Sharing from "expo-sharing";
-import * as MediaLibrary from "expo-media-library";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type PetType = "dog" | "cat";
-type PetGender = "male" | "female";
-
-type FortuneResult = {
-  summary: string;
-  health: string;
-  appetite: string;
-  mood: string;
-  caution: string;
-  luckyColor: string;
-  luckyItem: string;
-  recommendedAction: string;
-};
-
-type PremiumAccessState = {
-  allAccess: boolean;
-};
-
-type FortuneHistoryItem = {
-  id: string;
-  createdAt: string;
-  petName: string;
-  petType: string;
-  petGender: string;
-  breed: string;
-  age: string;
-  summary: string;
-  health: string;
-  appetite: string;
-  mood: string;
-  caution: string;
-  luckyColor: string;
-  luckyItem: string;
-  recommendedAction: string;
-};
+import AppButton from "../components/AppButton";
+import SectionCard from "../components/SectionCard";
+import { COLORS } from "../constants/colors";
+import type {
+  FortuneHistoryItem,
+  FortuneResult,
+  PetGender,
+  PetType,
+  PremiumAccessState,
+} from "../types";
 
 const PREMIUM_ACCESS_KEY = "mungnyang-premium-access";
 const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
@@ -677,7 +652,7 @@ export default function ResultScreen() {
     >
       <Text style={styles.title}>멍냥사주 결과 🐾</Text>
 
-      <View style={styles.infoCard}>
+      <SectionCard>
         <Text style={styles.petName}>
           {petEmoji} {petName} ({petAge})
         </Text>
@@ -689,7 +664,7 @@ export default function ResultScreen() {
         </Text>
         <Text style={styles.subText}>생일: {birthDate}</Text>
         <Text style={styles.subText}>태어난 시간: {birthTime}</Text>
-      </View>
+      </SectionCard>
 
       <View
         ref={shareCardRef}
@@ -843,45 +818,34 @@ export default function ResultScreen() {
       </Pressable>
 
       <View style={styles.actionColumn}>
-        <Pressable
-          style={styles.captionShareButton}
+        <AppButton
+          title={isSharingCaption ? "문구 공유 중..." : "문구 + 해시태그 공유"}
           onPress={handleShareCaption}
+          variant="outline"
           disabled={isSharingCaption}
-        >
-          <Text style={styles.captionShareButtonText}>
-            {isSharingCaption ? "문구 공유 중..." : "문구 + 해시태그 공유"}
-          </Text>
-        </Pressable>
+        />
 
         <View style={styles.actionRow}>
-          <Pressable
-            style={styles.saveButton}
-            onPress={handleSaveImage}
-            disabled={isSaving}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSaving ? "저장 중..." : "이미지 저장"}
-            </Text>
-          </Pressable>
+          <View style={styles.actionHalf}>
+            <AppButton
+              title={isSaving ? "저장 중..." : "이미지 저장"}
+              onPress={handleSaveImage}
+              variant="outline"
+              disabled={isSaving}
+            />
+          </View>
 
-          <Pressable
-            style={styles.shareButton}
-            onPress={handleShareImage}
-            disabled={isSharing}
-          >
-            <Text style={styles.shareButtonText}>
-              {isSharing ? "공유 중..." : "이미지 공유"}
-            </Text>
-          </Pressable>
+          <View style={styles.actionHalf}>
+            <AppButton
+              title={isSharing ? "공유 중..." : "이미지 공유"}
+              onPress={handleShareImage}
+              disabled={isSharing}
+            />
+          </View>
         </View>
       </View>
 
-      <Pressable
-        style={styles.primaryButton}
-        onPress={() => router.replace("/home")}
-      >
-        <Text style={styles.primaryButtonText}>다시 등록하기</Text>
-      </Pressable>
+      <AppButton title="다시 등록하기" onPress={() => router.replace("/home")} />
     </ScrollView>
   );
 }
@@ -889,7 +853,7 @@ export default function ResultScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#FFF9F3",
+    backgroundColor: COLORS.bg,
   },
   container: {
     padding: 20,
@@ -899,26 +863,21 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: "700",
-    color: "#2E2A27",
-  },
-  infoCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
+    color: COLORS.text,
   },
   petName: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   petMeta: {
     marginTop: 4,
-    color: "#777",
+    color: COLORS.subText,
   },
   subText: {
     marginTop: 6,
     fontSize: 13,
-    color: "#8B8178",
+    color: COLORS.muted,
   },
   storyCard: {
     borderRadius: 28,
@@ -931,7 +890,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   storyBadge: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -947,7 +906,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     fontSize: 26,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   storyMeta: {
     marginTop: 6,
@@ -963,7 +922,7 @@ const styles = StyleSheet.create({
   storySummary: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.text,
     lineHeight: 28,
   },
   storyGrid: {
@@ -978,13 +937,13 @@ const styles = StyleSheet.create({
   storyGridLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#8B8178",
+    color: COLORS.muted,
     marginBottom: 6,
   },
   storyGridValue: {
     fontSize: 14,
     lineHeight: 22,
-    color: "#2E2A27",
+    color: COLORS.text,
     fontWeight: "700",
   },
   storyBottomRow: {
@@ -1001,31 +960,31 @@ const styles = StyleSheet.create({
   storyMiniLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#8B8178",
+    color: COLORS.muted,
     marginBottom: 6,
   },
   storyMiniValue: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.text,
     lineHeight: 22,
   },
   storyActionBox: {
     marginTop: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 20,
     padding: 16,
   },
   storyActionLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#8B8178",
+    color: COLORS.muted,
     marginBottom: 6,
   },
   storyActionText: {
     fontSize: 15,
     lineHeight: 24,
-    color: "#2E2A27",
+    color: COLORS.text,
     fontWeight: "700",
   },
   storyFooter: {
@@ -1041,29 +1000,29 @@ const styles = StyleSheet.create({
   premiumHeaderTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   premiumHeaderSub: {
     marginTop: 4,
     fontSize: 13,
-    color: "#8B8178",
+    color: COLORS.muted,
   },
   lockedButton: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E6D9CF",
+    borderColor: COLORS.border,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   unlockedButton: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#CFE7D3",
+    borderColor: COLORS.borderSuccess,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -1075,19 +1034,19 @@ const styles = StyleSheet.create({
   lockedTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#2E2A27",
+    color: COLORS.text,
   },
   lockedSub: {
     marginTop: 6,
     fontSize: 13,
-    color: "#7A6F66",
+    color: COLORS.subText,
     lineHeight: 18,
   },
   badge: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#8C5A3C",
-    backgroundColor: "#FFE9D6",
+    color: COLORS.secondary,
+    backgroundColor: COLORS.accentSoft,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1096,8 +1055,8 @@ const styles = StyleSheet.create({
   unlockedBadge: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#2E2A27",
-    backgroundColor: "#DDF3E4",
+    color: COLORS.text,
+    backgroundColor: COLORS.successSoft,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1106,58 +1065,11 @@ const styles = StyleSheet.create({
   actionColumn: {
     gap: 10,
   },
-  captionShareButton: {
-    backgroundColor: "#FFF0E4",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#F2C7A5",
-  },
-  captionShareButtonText: {
-    color: "#8C5A3C",
-    fontSize: 15,
-    fontWeight: "800",
-  },
   actionRow: {
     flexDirection: "row",
     gap: 10,
   },
-  saveButton: {
+  actionHalf: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E6D9CF",
-  },
-  saveButtonText: {
-    color: "#2E2A27",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  shareButton: {
-    flex: 1,
-    backgroundColor: "#2E2A27",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  shareButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  primaryButton: {
-    backgroundColor: "#8C5A3C",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
   },
 });

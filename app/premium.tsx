@@ -1,24 +1,88 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
+import AppButton from "../components/AppButton";
+import SectionCard from "../components/SectionCard";
+import { COLORS } from "../constants/colors";
+import type { PetGender, PetType } from "../types";
+
+const PREMIUM_ACCESS_KEY = "mungnyang-premium-access";
+
+function getPetVisual(petType: PetType, breed: string) {
+  const lower = breed.toLowerCase();
+
+  if (petType === "dog") {
+    if (lower.includes("말티즈")) return "🐶";
+    if (lower.includes("포메")) return "🐕";
+    if (lower.includes("푸들")) return "🐩";
+    if (lower.includes("시츄")) return "🐶";
+    if (lower.includes("리트리버")) return "🦮";
+    if (lower.includes("웰시")) return "🐕‍🦺";
+    return "🐶";
+  }
+
+  if (petType === "cat") {
+    if (lower.includes("코숏")) return "🐱";
+    if (lower.includes("페르시안")) return "🐈";
+    if (lower.includes("러시안")) return "🐈‍⬛";
+    if (lower.includes("먼치킨")) return "🐱";
+    if (lower.includes("스핑크스")) return "🐈";
+    return "🐱";
+  }
+
+  return "🐾";
+}
+
+function calculateAge(birthDate: string) {
+  const onlyNumbers = birthDate.replace(/\D/g, "");
+
+  if (onlyNumbers.length !== 8) {
+    return "나이 미확인";
+  }
+
+  const year = Number(onlyNumbers.slice(0, 4));
+  const month = Number(onlyNumbers.slice(4, 6));
+  const day = Number(onlyNumbers.slice(6, 8));
+
+  const today = new Date();
+  let age = today.getFullYear() - year;
+
+  const hasNotHadBirthdayYet =
+    today.getMonth() + 1 < month ||
+    (today.getMonth() + 1 === month && today.getDate() < day);
+
+  if (hasNotHadBirthdayYet) {
+    age -= 1;
+  }
+
+  if (age < 0) {
+    return "나이 미확인";
+  }
+
+  return `${age}살`;
+}
 
 export default function PremiumScreen() {
   const params = useLocalSearchParams();
 
   const petName = String(params.petName ?? "코코");
-  const petType = String(params.petType ?? "dog");
-  const petGender = String(params.petGender ?? "male");
+  const petType = String(params.petType ?? "dog") as PetType;
+  const petGender = String(params.petGender ?? "male") as PetGender;
   const breed = String(params.breed ?? "품종 미입력");
   const birthDate = String(params.birthDate ?? "생일 미입력");
   const birthTime = String(params.birthTime ?? "시간 모름");
-  const isNeutered = String(params.isNeutered ?? "false");
+  const isNeutered = String(params.isNeutered ?? "false") === "true";
 
+  const petEmoji = getPetVisual(petType, breed);
   const petTypeLabel = petType === "cat" ? "고양이" : "강아지";
   const petGenderLabel = petGender === "female" ? "여아" : "남아";
-  const petEmoji = petType === "cat" ? "🐱" : "🐶";
+  const petAge = calculateAge(birthDate);
+  const neuteredLabel = isNeutered ? "중성화 완료" : "중성화 미완료";
 
-  const goBackToResult = () => {
-    router.push({
-      pathname: "/result" as const,
+  const goToPersonality = () => {
+    router.replace({
+      pathname: "/personality" as const,
       params: {
         petName,
         petType,
@@ -26,16 +90,70 @@ export default function PremiumScreen() {
         breed,
         birthDate,
         birthTime,
-        isNeutered,
+        isNeutered: isNeutered ? "true" : "false",
       },
     });
   };
 
-  const handlePurchaseAllAccess = () => {
-    Alert.alert(
-      "결제 연동 전",
-      "현재는 실제 인앱결제가 아직 연결되지 않았습니다. 다음 단계에서 Google Play 결제를 붙일 예정입니다."
-    );
+  const goToNaming = () => {
+    router.replace({
+      pathname: "/naming" as const,
+      params: {
+        petName,
+        petType,
+        petGender,
+        breed,
+        birthDate,
+        birthTime,
+        isNeutered: isNeutered ? "true" : "false",
+      },
+    });
+  };
+
+  const goToCompatibility = () => {
+    router.replace({
+      pathname: "/compatibility" as const,
+      params: {
+        petName,
+        petType,
+        petGender,
+        breed,
+        birthDate,
+        birthTime,
+        isNeutered: isNeutered ? "true" : "false",
+      },
+    });
+  };
+
+  const handleUnlockPremium = async () => {
+    try {
+      await AsyncStorage.setItem(
+        PREMIUM_ACCESS_KEY,
+        JSON.stringify({
+          allAccess: true,
+          unlockedAt: new Date().toISOString(),
+          productId: "all-access-990",
+        })
+      );
+
+      Alert.alert(
+        "프리미엄 열림",
+        "모든 프리미엄 기능이 열렸습니다.",
+        [
+          {
+            text: "성격 분석 보기",
+            onPress: goToPersonality,
+          },
+          {
+            text: "닫기",
+            style: "cancel",
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("프리미엄 상태 저장 실패", error);
+      Alert.alert("오류", "프리미엄 상태를 저장하지 못했습니다.");
+    }
   };
 
   return (
@@ -49,101 +167,116 @@ export default function PremiumScreen() {
           <Text style={styles.heroBadgeText}>PREMIUM</Text>
         </View>
 
-        <Text style={styles.title}>프리미엄 전체 잠금 해제 👑</Text>
-        <Text style={styles.subtitle}>
-          복잡하게 나누지 않고, 한 번에 모든 프리미엄 기능을 열 수 있어요.
+        <Text style={styles.heroTitle}>모든 프리미엄 기능 열기 ✨</Text>
+        <Text style={styles.heroSubtitle}>
+          한 번만 열면 성격 분석, 작명 풀이, 보호자 궁합까지 전부 이용할 수 있어요.
         </Text>
+      </View>
 
-        <View style={styles.heroPriceWrap}>
-          <Text style={styles.heroPriceLabel}>출시 기념 가격</Text>
-          <Text style={styles.heroPrice}>₩990</Text>
-          <Text style={styles.heroPriceSub}>
-            성격 분석 · 작명 풀이 · 보호자 궁합 전체 오픈
+      <SectionCard>
+        <Text style={styles.petName}>
+          {petEmoji} {petName} ({petAge})
+        </Text>
+        <Text style={styles.petMeta}>
+          {petTypeLabel} · {breed}
+        </Text>
+        <Text style={styles.subText}>
+          성별: {petGenderLabel} · {neuteredLabel}
+        </Text>
+        <Text style={styles.subText}>생일: {birthDate}</Text>
+        <Text style={styles.subText}>태어난 시간: {birthTime}</Text>
+      </SectionCard>
+
+      <SectionCard>
+        <Text style={styles.sectionTitle}>이용권 구성</Text>
+
+        <View style={styles.priceCard}>
+          <Text style={styles.priceLabel}>전체 프리미엄 이용권</Text>
+          <Text style={styles.priceValue}>₩990</Text>
+          <Text style={styles.priceSubText}>
+            어떤 기능을 눌러도 추가 결제 없이 모두 사용
           </Text>
         </View>
-      </View>
 
-      <View style={styles.profileCard}>
-        <Text style={styles.profileEmoji}>{petEmoji}</Text>
-        <Text style={styles.profileTitle}>{petName}</Text>
-        <Text style={styles.profileMeta}>
-          {petTypeLabel} · {breed} · {petGenderLabel}
-        </Text>
-        <Text style={styles.profileSubMeta}>
-          생일 {birthDate} · {birthTime}
-        </Text>
-      </View>
+        <View style={styles.featureList}>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>✨</Text>
+            <View style={styles.featureTextWrap}>
+              <Text style={styles.featureTitle}>타고난 성격 분석</Text>
+              <Text style={styles.featureDesc}>
+                성향 3가지, 관계 팁, 오행 무드 해석
+              </Text>
+            </View>
+          </View>
 
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>이 상품으로 열리는 기능</Text>
-        <Text style={styles.summaryText}>
-          한 번만 열면 결과 화면의 프리미엄 분석을 전부 바로 볼 수 있어요.
-        </Text>
-      </View>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>📝</Text>
+            <View style={styles.featureTextWrap}>
+              <Text style={styles.featureTitle}>작명 풀이 / 이름 추천</Text>
+              <Text style={styles.featureDesc}>
+                현재 이름의 인상과 새로운 추천 이름 제공
+              </Text>
+            </View>
+          </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>포함 기능</Text>
-
-        <View style={styles.featureItem}>
-          <Text style={styles.featureEmoji}>✨</Text>
-          <View style={styles.featureTextWrap}>
-            <Text style={styles.featureTitle}>타고난 성격 분석</Text>
-            <Text style={styles.featureDesc}>
-              대표 성향 3가지, 보호자 팁, 오행 무드를 더 깊게 볼 수 있어요.
-            </Text>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureEmoji}>💞</Text>
+            <View style={styles.featureTextWrap}>
+              <Text style={styles.featureTitle}>보호자와의 궁합</Text>
+              <Text style={styles.featureDesc}>
+                궁합 점수, 잘 맞는 포인트, 관계 팁 확인
+              </Text>
+            </View>
           </View>
         </View>
+      </SectionCard>
 
-        <View style={styles.featureItem}>
-          <Text style={styles.featureEmoji}>✍️</Text>
-          <View style={styles.featureTextWrap}>
-            <Text style={styles.featureTitle}>작명 풀이 / 이름 추천</Text>
-            <Text style={styles.featureDesc}>
-              현재 이름의 분위기와 어울리는 추천 이름 후보를 확인할 수 있어요.
+      <SectionCard>
+        <Text style={styles.sectionTitle}>미리 보기</Text>
+
+        <Pressable style={styles.previewCard} onPress={goToPersonality}>
+          <View style={styles.previewLeft}>
+            <Text style={styles.previewTitle}>✨ 타고난 성격 분석</Text>
+            <Text style={styles.previewDesc}>
+              우리 아이의 성향을 더 자세히 해석해드려요
             </Text>
           </View>
-        </View>
-
-        <View style={styles.featureItem}>
-          <Text style={styles.featureEmoji}>💞</Text>
-          <View style={styles.featureTextWrap}>
-            <Text style={styles.featureTitle}>보호자와의 궁합</Text>
-            <Text style={styles.featureDesc}>
-              생년월일 기준으로 궁합 점수와 관계 팁을 볼 수 있어요.
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>이런 분께 잘 맞아요</Text>
-        <Text style={styles.bullet}>• 우리 아이 이야기를 더 길고 풍부하게 보고 싶은 보호자</Text>
-        <Text style={styles.bullet}>• 단순 오늘 운세보다 성격/이름/궁합까지 보고 싶은 분</Text>
-        <Text style={styles.bullet}>• 인스타 공유용으로도 더 재미있는 콘텐츠를 원하는 분</Text>
-      </View>
-
-      <View style={styles.priceCard}>
-        <Text style={styles.priceLabel}>프리미엄 전체 상품</Text>
-        <Text style={styles.priceTitle}>전체 잠금 해제</Text>
-        <Text style={styles.priceValue}>₩990</Text>
-        <Text style={styles.priceDescription}>
-          한 번만 결제하면 모든 프리미엄 기능을 사용할 수 있는 구조로 기획했어요.
-        </Text>
-
-        <Pressable
-          style={styles.primaryButton}
-          onPress={handlePurchaseAllAccess}
-        >
-          <Text style={styles.primaryButtonText}>₩990으로 전체 잠금 해제</Text>
+          <Text style={styles.previewBadge}>OPEN</Text>
         </Pressable>
+
+        <Pressable style={styles.previewCard} onPress={goToNaming}>
+          <View style={styles.previewLeft}>
+            <Text style={styles.previewTitle}>📝 작명 풀이 / 이름 추천</Text>
+            <Text style={styles.previewDesc}>
+              이름의 느낌과 어울리는 추천 이름을 볼 수 있어요
+            </Text>
+          </View>
+          <Text style={styles.previewBadge}>OPEN</Text>
+        </Pressable>
+
+        <Pressable style={styles.previewCard} onPress={goToCompatibility}>
+          <View style={styles.previewLeft}>
+            <Text style={styles.previewTitle}>💞 보호자와의 궁합</Text>
+            <Text style={styles.previewDesc}>
+              관계 흐름과 잘 맞는 포인트를 알려드려요
+            </Text>
+          </View>
+          <Text style={styles.previewBadge}>OPEN</Text>
+        </Pressable>
+      </SectionCard>
+
+      <View style={styles.buttonGroup}>
+        <AppButton title="₩990으로 전체 열기" onPress={handleUnlockPremium} />
+        <AppButton
+          title="결과 화면으로 돌아가기"
+          onPress={() => router.back()}
+          variant="outline"
+        />
       </View>
 
-      <Pressable
-        style={styles.secondaryButton}
-        onPress={goBackToResult}
-      >
-        <Text style={styles.secondaryButtonText}>결과 화면으로 돌아가기</Text>
-      </Pressable>
+      <Text style={styles.footNote}>
+        현재는 테스트용으로 프리미엄 상태만 저장됩니다.
+      </Text>
     </ScrollView>
   );
 }
@@ -151,21 +284,21 @@ export default function PremiumScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#FFF9F3",
+    backgroundColor: COLORS.bg,
   },
   container: {
     padding: 20,
     gap: 16,
-    paddingBottom: 44,
+    paddingBottom: 40,
   },
   heroCard: {
-    backgroundColor: "#2E2A27",
+    backgroundColor: COLORS.primary,
     borderRadius: 26,
     padding: 22,
   },
   heroBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#FFE9D6",
+    backgroundColor: COLORS.accentSoft,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -174,106 +307,76 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#2E2A27",
+    color: COLORS.primary,
   },
-  title: {
+  heroTitle: {
     fontSize: 28,
     fontWeight: "800",
     color: "#FFFFFF",
   },
-  subtitle: {
+  heroSubtitle: {
     marginTop: 10,
     fontSize: 15,
     lineHeight: 24,
     color: "#F5ECE5",
   },
-  heroPriceWrap: {
-    marginTop: 18,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 20,
-    padding: 16,
-  },
-  heroPriceLabel: {
-    fontSize: 13,
+  petName: {
+    fontSize: 20,
     fontWeight: "700",
-    color: "#F2C7A5",
+    color: COLORS.text,
   },
-  heroPrice: {
-    marginTop: 6,
-    fontSize: 34,
-    fontWeight: "800",
-    color: "#FFFFFF",
+  petMeta: {
+    marginTop: 4,
+    color: COLORS.subText,
   },
-  heroPriceSub: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 22,
-    color: "#F5ECE5",
-  },
-  profileCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 20,
-    alignItems: "center",
-  },
-  profileEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  profileTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#2E2A27",
-  },
-  profileMeta: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#6F645C",
-    textAlign: "center",
-  },
-  profileSubMeta: {
+  subText: {
     marginTop: 6,
     fontSize: 13,
-    color: "#8B8178",
-    textAlign: "center",
-  },
-  summaryCard: {
-    backgroundColor: "#FFE9D6",
-    borderRadius: 22,
-    padding: 18,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#8C5A3C",
-    marginBottom: 8,
-  },
-  summaryText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#2E2A27",
-    lineHeight: 28,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 16,
+    color: COLORS.muted,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#2E2A27",
-    marginBottom: 10,
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  priceCard: {
+    backgroundColor: COLORS.accentSoft,
+    borderRadius: 20,
+    padding: 18,
+  },
+  priceLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.secondary,
+    marginBottom: 8,
+  },
+  priceValue: {
+    fontSize: 32,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+  priceSubText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: COLORS.subText,
+    lineHeight: 20,
+  },
+  featureList: {
+    marginTop: 14,
+    gap: 12,
   },
   featureItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 14,
+    gap: 12,
+    backgroundColor: COLORS.bg,
+    borderRadius: 18,
+    padding: 14,
   },
   featureEmoji: {
     fontSize: 22,
-    marginRight: 10,
-    marginTop: 1,
+    marginTop: 2,
   },
   featureTextWrap: {
     flex: 1,
@@ -281,71 +384,55 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#2E2A27",
-    marginBottom: 4,
+    color: COLORS.text,
   },
   featureDesc: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: "#5F5752",
-  },
-  bullet: {
-    fontSize: 15,
-    color: "#4D4641",
-    lineHeight: 24,
-    marginBottom: 8,
-  },
-  priceCard: {
-    backgroundColor: "#FFE9D6",
-    borderRadius: 22,
-    padding: 18,
-  },
-  priceLabel: {
+    marginTop: 6,
     fontSize: 13,
-    fontWeight: "700",
-    color: "#8B8178",
+    color: COLORS.subText,
+    lineHeight: 20,
   },
-  priceTitle: {
-    marginTop: 8,
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#2E2A27",
-  },
-  priceValue: {
-    marginTop: 8,
-    fontSize: 34,
-    fontWeight: "800",
-    color: "#8C5A3C",
-  },
-  priceDescription: {
+  previewCard: {
+    backgroundColor: COLORS.bg,
+    borderRadius: 18,
+    padding: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 10,
-    fontSize: 15,
-    lineHeight: 24,
-    color: "#4D4641",
+    gap: 10,
   },
-  primaryButton: {
-    marginTop: 16,
-    backgroundColor: "#2E2A27",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
+  previewLeft: {
+    flex: 1,
   },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  secondaryButton: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E6D9CF",
-  },
-  secondaryButtonText: {
-    color: "#2E2A27",
+  previewTitle: {
     fontSize: 15,
     fontWeight: "800",
+    color: COLORS.text,
+  },
+  previewDesc: {
+    marginTop: 6,
+    fontSize: 13,
+    color: COLORS.subText,
+    lineHeight: 19,
+  },
+  previewBadge: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: COLORS.text,
+    backgroundColor: COLORS.successSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  buttonGroup: {
+    gap: 10,
+  },
+  footNote: {
+    fontSize: 12,
+    color: COLORS.muted,
+    textAlign: "center",
+    lineHeight: 18,
   },
 });
