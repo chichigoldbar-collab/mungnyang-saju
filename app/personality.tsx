@@ -1,251 +1,448 @@
-import { router, useLocalSearchParams } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
-import type { PetGender, PetType } from "../types";
+import type { SavedPetProfile } from "../types";
 
-function getPetVisual(petType: PetType, breed: string) {
-  const lower = breed.toLowerCase();
+const PET_STORAGE_KEY = "mungnyang-pet-profiles";
+const CURRENT_PET_KEY = "mungnyang-current-pet";
+const PERSONALITY_HISTORY_KEY = "mungnyang-personality-history";
 
-  if (petType === "dog") {
-    if (lower.includes("말티즈")) return "🐶";
-    if (lower.includes("포메")) return "🐕";
-    if (lower.includes("푸들")) return "🐩";
-    if (lower.includes("시츄")) return "🐶";
-    if (lower.includes("리트리버")) return "🦮";
-    if (lower.includes("웰시")) return "🐕‍🦺";
-    return "🐶";
+type PersonalityHistoryItem = {
+  id: string;
+  createdAt: string;
+  petId: string;
+  petName: string;
+  archetypeKey: string;
+  emotionKey: string;
+  relationKey: string;
+  stressKey: string;
+  routineKey: string;
+  tipKey: string;
+  closingKey: string;
+};
+
+type PersonalityResult = {
+  title: string;
+  summary: string;
+  archetype: string;
+  emotionStyle: string;
+  relationStyle: string;
+  stressPattern: string;
+  routineFit: string;
+  careTip: string;
+  closing: string;
+  archetypeKey: string;
+  emotionKey: string;
+  relationKey: string;
+  stressKey: string;
+  routineKey: string;
+  tipKey: string;
+  closingKey: string;
+};
+
+const archetypePool = [
+  {
+    key: "bright-player",
+    title: "밝은 장난꾸러기형",
+    summary:
+      "기본적으로 반응이 빠르고 즐거움을 크게 표현하는 타입이에요. 익숙한 사람과 환경 안에서 매력이 더 또렷하게 살아날 수 있어요.",
+    detail:
+      "놀이와 리액션에서 에너지가 크게 올라오는 편이라, 반응을 잘 받아주면 만족도도 함께 커지는 성향이에요.",
+  },
+  {
+    key: "soft-healer",
+    title: "포근한 힐링형",
+    summary:
+      "자극이 강한 상황보다 편안하고 안정된 환경에서 훨씬 매력이 잘 드러나는 타입이에요.",
+    detail:
+      "조용한 교감과 익숙한 루틴을 좋아하는 편이라, 천천히 쌓이는 신뢰 안에서 성격의 장점이 더 잘 보여요.",
+  },
+  {
+    key: "curious-observer",
+    title: "호기심 관찰형",
+    summary:
+      "가볍게 넘어가는 것 같아 보여도 주변 흐름을 세심하게 살피는 타입이에요. 궁금한 것이 생기면 집중도가 높아질 수 있어요.",
+    detail:
+      "새로운 냄새, 분위기, 움직임에 관심을 두는 편이라 탐색 시간이 충분할수록 만족감이 높아질 수 있어요.",
+  },
+  {
+    key: "independent-rhythm",
+    title: "자기 리듬 존중형",
+    summary:
+      "관심은 좋아하지만 방식과 타이밍은 스스로 정하고 싶어 하는 성향이 있어요.",
+    detail:
+      "혼자 쉬는 시간과 교감 시간이 분리되면 더 안정적으로 지내는 편이라, 거리감이 잘 맞을수록 편안해져요.",
+  },
+  {
+    key: "affection-magnet",
+    title: "애정 반응형",
+    summary:
+      "좋아하는 존재에게 마음이 쉽게 쏠리고, 관심을 받으면 기분이 크게 좋아지는 타입이에요.",
+    detail:
+      "표현이 크든 작든 애정에 대한 반응이 분명한 편이라, 짧은 칭찬과 교감만으로도 만족감이 크게 올라갈 수 있어요.",
+  },
+  {
+    key: "sensitive-reader",
+    title: "섬세한 분위기 감지형",
+    summary:
+      "작은 변화도 빠르게 읽어내는 편이라, 환경이나 사람의 텐션에 영향을 많이 받을 수 있어요.",
+    detail:
+      "차분하고 일정한 흐름에서는 안정감을 크게 느끼지만, 낯선 자극이 몰리면 예민함이 먼저 올라올 수 있어요.",
+  },
+];
+
+const emotionPool = [
+  {
+    key: "emotion-clear",
+    text: "감정 표현이 비교적 분명한 편이라 기분이 좋을 때와 아닌 때의 차이가 잘 드러날 수 있어요.",
+  },
+  {
+    key: "emotion-soft",
+    text: "감정 표현이 과하지는 않지만 은근하게 드러나는 편이라, 작은 반응을 잘 읽어주는 것이 중요해요.",
+  },
+  {
+    key: "emotion-fast",
+    text: "기분 변화가 빠른 편이라 즐거움과 예민함이 순간적으로 바뀔 수 있어요. 반응의 온도를 섬세하게 살펴주세요.",
+  },
+  {
+    key: "emotion-steady",
+    text: "전체적으로는 감정의 중심이 안정적인 편이에요. 다만 한번 불편함이 생기면 회복엔 약간의 시간이 필요할 수 있어요.",
+  },
+  {
+    key: "emotion-affection",
+    text: "좋아하는 사람이나 상황에서는 감정이 훨씬 부드럽게 풀리는 편이라, 애정의 방향이 분명한 타입일 가능성이 커요.",
+  },
+  {
+    key: "emotion-observe",
+    text: "바로 표현하기보다 먼저 살핀 뒤 반응하는 편이라, 감정이 늦게 드러나는 것처럼 보여도 내면 반응은 꽤 풍부할 수 있어요.",
+  },
+];
+
+const relationPool = [
+  {
+    key: "relation-close",
+    text: "보호자와 가까운 거리에서 안정감을 느끼는 편이라, 함께 있는 시간 자체가 성격 안정에 큰 영향을 줄 수 있어요.",
+  },
+  {
+    key: "relation-balance",
+    text: "붙어 있는 시간도 좋지만 혼자만의 시간도 중요하게 여기는 편이에요. 균형이 맞을수록 더 편안한 관계가 될 수 있어요.",
+  },
+  {
+    key: "relation-play",
+    text: "놀이와 반응 속에서 친밀감이 커지는 타입이라, 함께 웃고 움직이는 시간이 관계를 빠르게 깊게 만들 수 있어요.",
+  },
+  {
+    key: "relation-trust",
+    text: "빠른 친밀감보다 신뢰가 쌓이면서 점점 더 깊어지는 관계를 선호하는 편이에요.",
+  },
+  {
+    key: "relation-selective",
+    text: "누구에게나 마음을 여는 타입보다는, 좋아하는 존재에게 더 선명하게 반응하는 편일 수 있어요.",
+  },
+  {
+    key: "relation-calm",
+    text: "큰 이벤트보다 조용하고 안정적인 교감 안에서 관계 만족도가 높아지는 성향이 느껴져요.",
+  },
+];
+
+const stressPool = [
+  {
+    key: "stress-noise",
+    text: "큰 소리나 갑작스러운 변화에 긴장이 올라갈 수 있어요. 예민한 날엔 안정적인 환경이 특히 중요해요.",
+  },
+  {
+    key: "stress-routine",
+    text: "루틴이 흔들릴 때 스트레스를 더 크게 느낄 가능성이 있어요. 일정한 생활 리듬이 안정감을 줄 수 있어요.",
+  },
+  {
+    key: "stress-distance",
+    text: "원하는 거리감이 지켜지지 않을 때 예민함이 생길 수 있어요. 혼자 쉬는 시간도 중요한 회복 요소일 수 있어요.",
+  },
+  {
+    key: "stress-excited",
+    text: "너무 신난 상황이 오히려 피로로 이어질 수 있어요. 즐거움 뒤의 진정 시간이 꼭 필요할 수 있어요.",
+  },
+  {
+    key: "stress-overcare",
+    text: "지나치게 많은 반응이나 관심이 오히려 부담이 될 수 있어요. 때로는 한 템포 쉬어가는 게 더 도움이 돼요.",
+  },
+  {
+    key: "stress-stranger",
+    text: "낯선 사람이나 새로운 환경 앞에서 긴장을 느낄 수 있어요. 적응 시간을 충분히 주는 것이 중요해요.",
+  },
+];
+
+const routinePool = [
+  {
+    key: "routine-play",
+    text: "짧고 자주 노는 리듬이 잘 맞을 수 있어요. 길고 무거운 놀이보다 가볍고 반복적인 교감이 더 만족스러울 수 있어요.",
+  },
+  {
+    key: "routine-rest",
+    text: "충분한 휴식과 안정된 공간이 성격의 좋은 면을 더 잘 드러내게 할 수 있어요.",
+  },
+  {
+    key: "routine-walk",
+    text: "산책이나 탐색 시간이 성격 만족도에 큰 영향을 줄 수 있어요. 바깥 자극을 편안하게 받아들이게 도와주세요.",
+  },
+  {
+    key: "routine-touch",
+    text: "짧은 터치, 빗질, 눈맞춤 같은 소소한 교감이 일상 루틴 안에서 중요한 안정 장치가 될 수 있어요.",
+  },
+  {
+    key: "routine-praise",
+    text: "작은 행동에도 칭찬을 자주 받는 루틴이 자신감과 안정감을 동시에 높여줄 수 있어요.",
+  },
+  {
+    key: "routine-predictable",
+    text: "예측 가능한 시간표가 특히 잘 맞는 타입이에요. 식사와 휴식 시간이 일정하면 훨씬 편안해질 수 있어요.",
+  },
+];
+
+const careTipPool = [
+  {
+    key: "tip-calm-tone",
+    text: "오늘은 말투와 반응을 한 톤 차분하게 유지해 주면 성격의 장점이 더 편안하게 살아날 수 있어요.",
+  },
+  {
+    key: "tip-short-play",
+    text: "오늘은 짧고 즐거운 놀이를 자주 나눠주는 것이 만족감을 높이는 포인트가 될 수 있어요.",
+  },
+  {
+    key: "tip-space",
+    text: "다가가는 것보다 먼저 편안한 공간을 만들어 주는 것이 더 좋은 반응으로 이어질 수 있어요.",
+  },
+  {
+    key: "tip-routine",
+    text: "평소와 비슷한 루틴을 유지해 주는 것만으로도 훨씬 안정적인 하루를 보낼 수 있어요.",
+  },
+  {
+    key: "tip-eye",
+    text: "눈맞춤과 짧은 칭찬을 자주 해주면 정서적 만족도가 더 크게 올라갈 수 있어요.",
+  },
+  {
+    key: "tip-rest-first",
+    text: "무언가를 더 하기보다 먼저 쉬는 환경을 정리해 주는 것이 오늘은 더 좋은 케어가 될 수 있어요.",
+  },
+];
+
+const closingPool = [
+  {
+    key: "closing-1",
+    text: "전체적으로는 성격의 결이 분명한 타입이에요. 억지로 바꾸기보다 잘 맞는 환경을 만들어 줄수록 더 사랑스러운 면이 자연스럽게 드러날 수 있어요.",
+  },
+  {
+    key: "closing-2",
+    text: "이 아이는 반응을 잘 읽어주고 리듬을 맞춰줄 때 훨씬 편안해지는 성향이 강해 보여요. 작은 배려가 큰 안정으로 이어질 수 있어요.",
+  },
+  {
+    key: "closing-3",
+    text: "강한 자극보다는 편안한 루틴 안에서 장점이 깊어지는 타입이에요. 보호자의 안정적인 태도가 좋은 성격을 더 길게 유지하게 해줄 수 있어요.",
+  },
+  {
+    key: "closing-4",
+    text: "성격 자체가 나쁘다기보다 환경과 방식에 따라 달라지는 폭이 큰 편이에요. 잘 맞는 교감 방식을 찾으면 훨씬 더 매력적으로 빛날 수 있어요.",
+  },
+  {
+    key: "closing-5",
+    text: "본래 가진 기질이 분명해서, 억지로 맞추기보다 장점을 살려주는 방향이 훨씬 잘 맞아요. 이해받는다는 느낌이 중요할 수 있어요.",
+  },
+  {
+    key: "closing-6",
+    text: "차분한 배려와 적절한 리액션이 함께 있을 때 가장 이상적인 성격 흐름이 나올 수 있어요. 보호자와의 호흡이 성격 안정에 큰 영향을 줄 수 있어요.",
+  },
+];
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   }
-
-  if (petType === "cat") {
-    if (lower.includes("코숏")) return "🐱";
-    if (lower.includes("페르시안")) return "🐈";
-    if (lower.includes("러시안")) return "🐈‍⬛";
-    if (lower.includes("먼치킨")) return "🐱";
-    if (lower.includes("스핑크스")) return "🐈";
-    return "🐱";
-  }
-
-  return "🐾";
+  return hash;
 }
 
-function calculateAge(birthDate: string) {
-  const onlyNumbers = birthDate.replace(/\D/g, "");
-
-  if (onlyNumbers.length !== 8) {
-    return "나이 미확인";
-  }
-
-  const year = Number(onlyNumbers.slice(0, 4));
-  const month = Number(onlyNumbers.slice(4, 6));
-  const day = Number(onlyNumbers.slice(6, 8));
-
-  const today = new Date();
-  let age = today.getFullYear() - year;
-
-  const hasNotHadBirthdayYet =
-    today.getMonth() + 1 < month ||
-    (today.getMonth() + 1 === month && today.getDate() < day);
-
-  if (hasNotHadBirthdayYet) {
-    age -= 1;
-  }
-
-  if (age < 0) {
-    return "나이 미확인";
-  }
-
-  return `${age}살`;
+function getTodayKey() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-function getElementMood(petType: PetType, petGender: PetGender, isNeutered: boolean) {
-  if (petType === "dog") {
-    if (petGender === "female") {
-      return isNeutered
-        ? {
-            element: "토(土)",
-            title: "부드럽고 안정적인 흙의 기운",
-            desc: "편안한 루틴과 익숙한 공간에서 마음이 가장 잘 열리는 타입이에요. 다정함과 섬세함이 함께 살아나는 편이에요.",
-            color: "#F4E2A1",
-          }
-        : {
-            element: "화(火)",
-            title: "애정 표현이 강한 불의 기운",
-            desc: "사랑받고 싶은 마음과 감정 표현이 풍부한 타입이에요. 반응을 잘 받아주면 더 밝고 따뜻하게 빛나요.",
-            color: "#FFD2C7",
-          };
-    }
-
-    return isNeutered
-      ? {
-          element: "금(金)",
-          title: "균형감 있는 금의 기운",
-          desc: "에너지가 있어도 자기 리듬을 어느 정도 지킬 줄 아는 편이에요. 규칙과 루틴이 잘 맞는 타입이에요.",
-          color: "#EAEAEA",
-        }
-      : {
-          element: "목(木)",
-          title: "쑥쑥 뻗는 나무의 기운",
-          desc: "호기심과 활동성이 강하고, 새로운 자극에 민감하게 반응해요. 재미있는 것에 마음이 빨리 움직이는 타입이에요.",
-          color: "#D8F0D2",
-        };
-  }
-
-  if (petGender === "female") {
-    return isNeutered
-      ? {
-          element: "수(水)",
-          title: "차분하고 깊은 물의 기운",
-          desc: "감정이 섬세하고 분위기를 많이 읽는 타입이에요. 조용하고 편안한 환경에서 가장 안정감을 느껴요.",
-          color: "#D9EAFE",
-        }
-      : {
-          element: "금(金)",
-          title: "예민하지만 우아한 금의 기운",
-          desc: "좋고 싫음이 분명하고 취향이 뚜렷한 타입이에요. 자기만의 기준이 있고 그걸 존중받을 때 더 다정해져요.",
-          color: "#F0F0F0",
-        };
-  }
-
-  return isNeutered
-    ? {
-        element: "토(土)",
-        title: "조용히 중심을 잡는 흙의 기운",
-        desc: "자기 자리를 중요하게 생각하고 안정적인 흐름을 좋아해요. 낯선 환경보다 익숙한 공간에서 훨씬 편안해요.",
-        color: "#F4E2A1",
-      }
-    : {
-        element: "수(水)",
-        title: "관찰력이 좋은 물의 기운",
-        desc: "겉으로는 무심해 보여도 주변 분위기를 세심하게 읽는 타입이에요. 거리를 지키며 애정을 표현하는 편이에요.",
-        color: "#D9EAFE",
-      };
-}
-
-function getPersonalityTraits(
-  petType: PetType,
-  petGender: PetGender,
-  isNeutered: boolean
+function pickNonRecent<T extends { key: string }>(
+  pool: T[],
+  seed: number,
+  recentKeys: string[]
 ) {
-  if (petType === "dog") {
-    if (petGender === "female") {
-      return [
-        {
-          title: "애정 반응형",
-          desc: "관심과 반응을 잘 받으면 기분이 빠르게 살아나는 타입이에요. 집사의 말투와 표정에 민감하게 반응할 수 있어요.",
-        },
-        {
-          title: "섬세한 기분파",
-          desc: "분위기가 편안하면 다정하고 사랑스럽지만, 어수선한 상황에서는 예민함이 먼저 올라올 수 있어요.",
-        },
-        {
-          title: isNeutered ? "안정 추구형" : "애교 폭발형",
-          desc: isNeutered
-            ? "자기 루틴과 익숙한 공간을 지킬 때 훨씬 편안해져요. 과한 자극보다 예측 가능한 흐름이 잘 맞아요."
-            : "좋아하는 사람 앞에서 감정 표현이 커지는 편이에요. 귀엽게 다가오고 싶어 하는 마음이 강할 수 있어요.",
-        },
-      ];
-    }
-
-    return [
-      {
-        title: "에너지 주도형",
-        desc: "몸보다 마음이 먼저 움직이는 타입이에요. 재밌는 자극을 보면 빠르게 반응하고 존재감을 드러내요.",
-      },
-      {
-        title: "리액션 민감형",
-        desc: "집사의 칭찬, 웃음, 반응에 크게 힘을 얻어요. 함께 놀아줄수록 더 밝고 적극적으로 변할 수 있어요.",
-      },
-      {
-        title: isNeutered ? "균형 활동형" : "직진 본능형",
-        desc: isNeutered
-          ? "에너지는 있지만 자기 리듬을 어느 정도 조절할 수 있어요. 짧고 집중도 높은 놀이가 잘 맞아요."
-          : "신나면 브레이크보다 직진이 먼저 나올 수 있어요. 흥분 조절을 도와주면 훨씬 안정적으로 빛나요.",
-      },
-    ];
-  }
-
-  if (petGender === "female") {
-    return [
-      {
-        title: "취향 분명형",
-        desc: "좋아하는 것과 싫어하는 것이 확실한 타입이에요. 마음에 드는 사람과 공간에는 부드럽게 마음을 열어요.",
-      },
-      {
-        title: "분위기 감지형",
-        desc: "시끄러움, 낯선 냄새, 갑작스러운 접촉 같은 변화를 크게 느낄 수 있어요. 조용한 안정감이 중요해요.",
-      },
-      {
-        title: isNeutered ? "차분 애착형" : "섬세 우아형",
-        desc: isNeutered
-          ? "겉으로는 조용하지만 신뢰가 생기면 은근하게 곁을 지키는 타입이에요."
-          : "자기만의 기준이 분명하고, 존중받을 때 더 부드럽고 다정한 매력을 보여줘요.",
-      },
-    ];
-  }
-
-  return [
-    {
-      title: "관찰 중심형",
-      desc: "먼저 나서기보다 상황을 충분히 살핀 뒤 반응하는 타입이에요. 주변 흐름을 조용히 읽고 있어요.",
-    },
-    {
-      title: "거리 조절형",
-      desc: "좋아하는 사람에게도 무조건 들이대기보다는 스스로 정한 거리 안에서 다가가고 싶어 해요.",
-    },
-    {
-      title: isNeutered ? "안정 페이스형" : "은근 애정형",
-      desc: isNeutered
-        ? "자기 자리를 지키고 조용한 흐름 속에서 편안함을 느껴요. 루틴이 무너지지 않을수록 안정적이에요."
-        : "겉으로는 무심해 보여도 마음이 열리면 은근한 애정 표현이 나와요. 조용한 교감이 잘 맞아요.",
-    },
-  ];
+  const filtered = pool.filter((item) => !recentKeys.includes(item.key));
+  const source = filtered.length > 0 ? filtered : pool;
+  return source[seed % source.length];
 }
 
-function getCareTips(
-  petType: PetType,
-  petGender: PetGender,
-  isNeutered: boolean
-) {
-  const commonTip1 =
-    petType === "dog"
-      ? "산책이나 놀이를 길게 하기보다, 오늘 컨디션에 맞는 적당한 길이로 조절해 주세요."
-      : "억지로 반응을 끌어내기보다 먼저 다가올 수 있는 여유를 주는 게 더 좋아요.";
+function buildPersonalityResult(args: {
+  pet: SavedPetProfile;
+  history: PersonalityHistoryItem[];
+}): PersonalityResult {
+  const { pet, history } = args;
+  const todayKey = getTodayKey();
 
-  const commonTip2 =
-    petGender === "female"
-      ? "예민한 신호가 보이면 바로 쉬는 흐름으로 전환해 주세요. 섬세하게 읽어주는 보호자와 잘 맞아요."
-      : "칭찬이나 조용한 반응처럼 분명하지만 부담 없는 교감이 관계를 더 편안하게 만들어줘요.";
+  const baseSeed = hashString(
+    `${pet.id}|${pet.petName}|${pet.petType}|${pet.petGender}|${pet.breed}|${pet.birthDate}|${pet.birthTime}|${todayKey}`
+  );
 
-  const commonTip3 = isNeutered
-    ? "안정감 있는 루틴, 익숙한 공간, 예측 가능한 흐름이 오늘의 성격을 가장 잘 살려줘요."
-    : "감정과 에너지가 빠르게 올라올 수 있으니, 흥분이 길게 이어지지 않도록 쉬는 타이밍을 꼭 주세요.";
+  const petHistory = history.filter((item) => item.petId === pet.id).slice(0, 7);
 
-  return [commonTip1, commonTip2, commonTip3];
+  const recentArchetype = petHistory.map((item) => item.archetypeKey);
+  const recentEmotion = petHistory.map((item) => item.emotionKey);
+  const recentRelation = petHistory.map((item) => item.relationKey);
+  const recentStress = petHistory.map((item) => item.stressKey);
+  const recentRoutine = petHistory.map((item) => item.routineKey);
+  const recentTip = petHistory.map((item) => item.tipKey);
+  const recentClosing = petHistory.map((item) => item.closingKey);
+
+  const archetype = pickNonRecent(archetypePool, baseSeed + 1, recentArchetype);
+  const emotion = pickNonRecent(emotionPool, baseSeed + 2, recentEmotion);
+  const relation = pickNonRecent(relationPool, baseSeed + 3, recentRelation);
+  const stress = pickNonRecent(stressPool, baseSeed + 4, recentStress);
+  const routine = pickNonRecent(routinePool, baseSeed + 5, recentRoutine);
+  const tip = pickNonRecent(careTipPool, baseSeed + 6, recentTip);
+  const closing = pickNonRecent(closingPool, baseSeed + 7, recentClosing);
+
+  const title =
+    pet.petType === "dog"
+      ? `${pet.petName}의 성격 결`
+      : `${pet.petName}의 기질 분석`;
+
+  const summary = `${pet.petName}는 "${archetype.title}" 기질이 강하게 느껴져요. ${archetype.summary}`;
+
+  return {
+    title,
+    summary,
+    archetype: `${archetype.title} · ${archetype.detail}`,
+    emotionStyle: emotion.text,
+    relationStyle: relation.text,
+    stressPattern: stress.text,
+    routineFit: routine.text,
+    careTip: tip.text,
+    closing: closing.text,
+    archetypeKey: archetype.key,
+    emotionKey: emotion.key,
+    relationKey: relation.key,
+    stressKey: stress.key,
+    routineKey: routine.key,
+    tipKey: tip.key,
+    closingKey: closing.key,
+  };
 }
 
 export default function PersonalityScreen() {
-  const params = useLocalSearchParams();
+  const [pets, setPets] = useState<SavedPetProfile[]>([]);
+  const [selectedPetId, setSelectedPetId] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<PersonalityResult | null>(null);
 
-  const petName = String(params.petName ?? "코코");
-  const petType = String(params.petType ?? "dog") as PetType;
-  const petGender = String(params.petGender ?? "male") as PetGender;
-  const breed = String(params.breed ?? "품종 미입력");
-  const birthDate = String(params.birthDate ?? "생일 미입력");
-  const birthTime = String(params.birthTime ?? "시간 모름");
-  const isNeutered = String(params.isNeutered ?? "false") === "true";
+  const selectedPet = useMemo(
+    () => pets.find((pet) => pet.id === selectedPetId) ?? null,
+    [pets, selectedPetId]
+  );
 
-  const petEmoji = getPetVisual(petType, breed);
-  const petTypeLabel = petType === "cat" ? "고양이" : "강아지";
-  const petGenderLabel = petGender === "female" ? "여아" : "남아";
-  const petAge = calculateAge(birthDate);
-  const neuteredLabel = isNeutered ? "중성화 완료" : "중성화 미완료";
+  const loadPets = useCallback(async () => {
+    try {
+      const [petsRaw, currentPetRaw] = await Promise.all([
+        AsyncStorage.getItem(PET_STORAGE_KEY),
+        AsyncStorage.getItem(CURRENT_PET_KEY),
+      ]);
 
-  const elementMood = getElementMood(petType, petGender, isNeutered);
-  const traits = getPersonalityTraits(petType, petGender, isNeutered);
-  const careTips = getCareTips(petType, petGender, isNeutered);
+      const parsedPets = petsRaw ? JSON.parse(petsRaw) : [];
+      const petList: SavedPetProfile[] = Array.isArray(parsedPets) ? parsedPets : [];
+      setPets(petList);
+
+      if (currentPetRaw) {
+        const currentPet: SavedPetProfile = JSON.parse(currentPetRaw);
+        const exists = petList.some((pet) => pet.id === currentPet.id);
+        if (exists) {
+          setSelectedPetId(currentPet.id);
+          return;
+        }
+      }
+
+      if (petList.length > 0) {
+        setSelectedPetId(petList[0].id);
+      } else {
+        setSelectedPetId("");
+      }
+    } catch (error) {
+      console.error("반려동물 목록 불러오기 실패", error);
+      setPets([]);
+      setSelectedPetId("");
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPets();
+    }, [loadPets])
+  );
+
+  const handleAnalyze = async () => {
+    if (!selectedPet) return;
+
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const historyRaw = await AsyncStorage.getItem(PERSONALITY_HISTORY_KEY);
+      const parsedHistory = historyRaw ? JSON.parse(historyRaw) : [];
+      const history: PersonalityHistoryItem[] = Array.isArray(parsedHistory)
+        ? parsedHistory
+        : [];
+
+      const generated = buildPersonalityResult({
+        pet: selectedPet,
+        history,
+      });
+
+      const historyItem: PersonalityHistoryItem = {
+        id: `${Date.now()}-${selectedPet.id}`,
+        createdAt: new Date().toISOString(),
+        petId: selectedPet.id,
+        petName: selectedPet.petName,
+        archetypeKey: generated.archetypeKey,
+        emotionKey: generated.emotionKey,
+        relationKey: generated.relationKey,
+        stressKey: generated.stressKey,
+        routineKey: generated.routineKey,
+        tipKey: generated.tipKey,
+        closingKey: generated.closingKey,
+      };
+
+      const updatedHistory = [historyItem, ...history].slice(0, 100);
+      await AsyncStorage.setItem(
+        PERSONALITY_HISTORY_KEY,
+        JSON.stringify(updatedHistory)
+      );
+
+      setTimeout(() => {
+        setResult(generated);
+        setIsLoading(false);
+      }, 2200);
+    } catch (error) {
+      console.error("성격 분석 실패", error);
+      setIsLoading(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -258,83 +455,121 @@ export default function PersonalityScreen() {
           <Text style={styles.heroBadgeText}>PERSONALITY</Text>
         </View>
 
-        <Text style={styles.heroTitle}>타고난 성격 분석 ✨</Text>
+        <Text style={styles.heroTitle}>성격 분석 🔥</Text>
         <Text style={styles.heroSubtitle}>
-          우리 아이의 기본 성향과 보호자가 알아두면 좋은 관계 팁을 정리했어요.
+          우리 아이의 기본 성향과 감정 표현 방식을 더 입체적으로 읽어드려요.
         </Text>
       </View>
 
       <SectionCard>
-        <Text style={styles.petName}>
-          {petEmoji} {petName} ({petAge})
-        </Text>
-        <Text style={styles.petMeta}>
-          {petTypeLabel} · {breed}
-        </Text>
-        <Text style={styles.subText}>
-          성별: {petGenderLabel} · {neuteredLabel}
-        </Text>
-        <Text style={styles.subText}>생일: {birthDate}</Text>
-        <Text style={styles.subText}>태어난 시간: {birthTime}</Text>
-      </SectionCard>
+        <Text style={styles.sectionTitle}>반려동물 선택</Text>
 
-      <SectionCard>
-        <Text style={styles.sectionTitle}>오행 무드</Text>
+        {pets.length === 0 ? (
+          <Text style={styles.helperText}>
+            등록된 반려동물이 없어요. 먼저 아이를 등록해 주세요.
+          </Text>
+        ) : (
+          <View style={styles.petChipWrap}>
+            {pets.map((pet) => {
+              const active = selectedPetId === pet.id;
+              return (
+                <Pressable
+                  key={pet.id}
+                  style={[styles.petChip, active && styles.petChipActive]}
+                  onPress={() => setSelectedPetId(pet.id)}
+                >
+                  <Text
+                    style={[
+                      styles.petChipText,
+                      active && styles.petChipTextActive,
+                    ]}
+                  >
+                    {pet.petType === "cat" ? "🐱" : "🐶"} {pet.petName}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
-        <View style={[styles.elementCard, { backgroundColor: elementMood.color }]}>
-          <Text style={styles.elementLabel}>{elementMood.element}</Text>
-          <Text style={styles.elementTitle}>{elementMood.title}</Text>
-          <Text style={styles.elementDesc}>{elementMood.desc}</Text>
+        <View style={styles.actionWrap}>
+          <AppButton
+            title="성격 분석하기"
+            onPress={handleAnalyze}
+            disabled={!selectedPet || isLoading}
+          />
         </View>
       </SectionCard>
 
-      <SectionCard>
-        <Text style={styles.sectionTitle}>핵심 성향 3가지</Text>
-
-        {traits.map((trait, index) => (
-          <View key={index} style={styles.traitCard}>
-            <Text style={styles.traitTitle}>{trait.title}</Text>
-            <Text style={styles.traitDesc}>{trait.desc}</Text>
+      {isLoading && (
+        <SectionCard>
+          <View style={styles.loadingBox}>
+            <Text style={styles.loadingEmoji}>
+              {selectedPet?.petType === "cat" ? "🐱" : "🐶"}
+            </Text>
+            <ActivityIndicator size="large" color={COLORS.secondary} />
+            <Text style={styles.loadingTitle}>성격 분석 중...</Text>
+            <Text style={styles.loadingDesc}>
+              기본 기질과 감정 표현 방식을 천천히 읽고 있어요.
+            </Text>
           </View>
-        ))}
-      </SectionCard>
+        </SectionCard>
+      )}
 
-      <SectionCard>
-        <Text style={styles.sectionTitle}>보호자 가이드</Text>
+      {!isLoading && result && (
+        <>
+          <SectionCard>
+            <View style={styles.todayCard}>
+              <Text style={styles.todayLabel}>PERSONALITY REPORT</Text>
+              <Text style={styles.todayTitle}>{result.title}</Text>
+              <Text style={styles.todaySummary}>{result.summary}</Text>
+            </View>
+          </SectionCard>
 
-        {careTips.map((tip, index) => (
-          <View key={index} style={styles.tipRow}>
-            <Text style={styles.tipIndex}>{index + 1}</Text>
-            <Text style={styles.tipText}>{tip}</Text>
-          </View>
-        ))}
-      </SectionCard>
+          <SectionCard>
+            <Text style={styles.sectionTitle}>성격 해석</Text>
 
-      <View style={styles.buttonGroup}>
-        <AppButton
-          title="작명 풀이 / 이름 추천 보기"
-          onPress={() =>
-            router.push({
-              pathname: "/naming" as const,
-              params: {
-                petName,
-                petType,
-                petGender,
-                breed,
-                birthDate,
-                birthTime,
-                isNeutered: isNeutered ? "true" : "false",
-              },
-            })
-          }
-        />
+            <View style={styles.resultCard}>
+              <Text style={styles.resultCardTitle}>기본 성향</Text>
+              <Text style={styles.resultCardDesc}>{result.archetype}</Text>
+            </View>
 
-        <AppButton
-          title="결과 화면으로 돌아가기"
-          onPress={() => router.back()}
-          variant="outline"
-        />
-      </View>
+            <View style={styles.resultCard}>
+              <Text style={styles.resultCardTitle}>감정 표현 방식</Text>
+              <Text style={styles.resultCardDesc}>{result.emotionStyle}</Text>
+            </View>
+
+            <View style={styles.resultCard}>
+              <Text style={styles.resultCardTitle}>관계 스타일</Text>
+              <Text style={styles.resultCardDesc}>{result.relationStyle}</Text>
+            </View>
+
+            <View style={styles.resultCard}>
+              <Text style={styles.resultCardTitle}>스트레스 반응</Text>
+              <Text style={styles.resultCardDesc}>{result.stressPattern}</Text>
+            </View>
+
+            <View style={styles.resultCard}>
+              <Text style={styles.resultCardTitle}>잘 맞는 루틴</Text>
+              <Text style={styles.resultCardDesc}>{result.routineFit}</Text>
+            </View>
+          </SectionCard>
+
+          <SectionCard>
+            <Text style={styles.sectionTitle}>보호자 팁</Text>
+
+            <View style={styles.tipCard}>
+              <Text style={styles.tipTitle}>케어 포인트</Text>
+              <Text style={styles.tipDesc}>{result.careTip}</Text>
+            </View>
+
+            <View style={styles.closingCard}>
+              <Text style={styles.closingTitle}>총평</Text>
+              <Text style={styles.closingText}>{result.closing}</Text>
+            </View>
+          </SectionCard>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -346,8 +581,8 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
+    paddingBottom: 44,
     gap: 16,
-    paddingBottom: 40,
   },
   heroCard: {
     backgroundColor: COLORS.primary,
@@ -378,92 +613,134 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#F5ECE5",
   },
-  petName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
-  petMeta: {
-    marginTop: 4,
-    color: COLORS.subText,
-  },
-  subText: {
-    marginTop: 6,
-    fontSize: 13,
-    color: COLORS.muted,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: COLORS.text,
+    marginBottom: 10,
+  },
+  helperText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.subText,
+  },
+  petChipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  petChip: {
+    backgroundColor: "#F7F2ED",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  petChipActive: {
+    backgroundColor: COLORS.accent,
+  },
+  petChipText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6B625C",
+  },
+  petChipTextActive: {
+    color: COLORS.text,
+  },
+  actionWrap: {
+    marginTop: 18,
+  },
+  loadingBox: {
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  loadingEmoji: {
+    fontSize: 34,
     marginBottom: 12,
   },
-  elementCard: {
+  loadingTitle: {
+    marginTop: 14,
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  loadingDesc: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.subText,
+    textAlign: "center",
+  },
+  todayCard: {
+    backgroundColor: "#FFF7EF",
     borderRadius: 20,
     padding: 18,
   },
-  elementLabel: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: COLORS.primary,
-    marginBottom: 8,
+  todayLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: COLORS.secondary,
+    letterSpacing: 0.6,
   },
-  elementTitle: {
-    fontSize: 22,
+  todayTitle: {
+    marginTop: 8,
+    fontSize: 24,
     fontWeight: "900",
     color: COLORS.text,
   },
-  elementDesc: {
-    marginTop: 10,
+  todaySummary: {
+    marginTop: 12,
     fontSize: 14,
-    color: COLORS.subText,
     lineHeight: 22,
+    color: COLORS.subText,
   },
-  traitCard: {
-    backgroundColor: COLORS.bg,
-    borderRadius: 18,
+  resultCard: {
+    backgroundColor: "#F7F2ED",
+    borderRadius: 16,
     padding: 14,
     marginTop: 10,
   },
-  traitTitle: {
+  resultCardTitle: {
     fontSize: 15,
     fontWeight: "800",
     color: COLORS.text,
   },
-  traitDesc: {
+  resultCardDesc: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.subText,
+  },
+  tipCard: {
+    backgroundColor: "#FFF8F0",
+    borderRadius: 18,
+    padding: 16,
+  },
+  tipTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  tipDesc: {
     marginTop: 8,
     fontSize: 14,
     lineHeight: 22,
     color: COLORS.subText,
   },
-  tipRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    backgroundColor: COLORS.bg,
+  closingCard: {
+    marginTop: 12,
+    backgroundColor: "#F7F2ED",
     borderRadius: 18,
-    padding: 14,
-    marginTop: 10,
+    padding: 16,
   },
-  tipIndex: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.accent,
-    textAlign: "center",
-    lineHeight: 24,
-    fontSize: 12,
+  closingTitle: {
+    fontSize: 15,
     fontWeight: "800",
     color: COLORS.text,
-    overflow: "hidden",
   },
-  tipText: {
-    flex: 1,
+  closingText: {
+    marginTop: 8,
     fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.subText,
-  },
-  buttonGroup: {
-    gap: 10,
+    lineHeight: 24,
+    color: COLORS.text,
   },
 });

@@ -1,6 +1,6 @@
+import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
 
 export default function IndexScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -23,11 +23,11 @@ export default function IndexScreen() {
     ]).start();
 
     const timer = setTimeout(() => {
-      router.replace("/home");
+      router.replace("/(tabs)");
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [fadeAnim, scaleAnim]);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -58,7 +58,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF4EA",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
   },
   logoWrap: {
     alignItems: "center",
@@ -76,15 +75,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 15,
     color: "#7A6F66",
-    textAlign: "center",
-    lineHeight: 22,
   },
   bottomText: {
     position: "absolute",
     bottom: 56,
     fontSize: 12,
-    fontWeight: "700",
     color: "#B59D8C",
-    letterSpacing: 2,
   },
 });

@@ -1,179 +1,306 @@
-import { useEffect, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useRef } from "react";
 import {
-  Animated,
-  Easing,
+  ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
 
-const LOADING_MESSAGES = [
-  "오행의 흐름을 읽는 중...",
-  "오늘의 기운을 분석하는 중...",
-  "행운 컬러를 찾는 중...",
-  "우리 아이의 기분을 해석하는 중...",
-  "결과를 정리하는 중...",
-];
+import { COLORS } from "../constants/colors";
+import type { FortuneHistoryItem, PetGender, PetType } from "../types";
+import { buildFortuneResult } from "../utils/fortune-generator";
+
+const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
+const DAILY_FORTUNE_CACHE_KEY = "mungnyang-daily-fortune-cache";
+
+type DailyFortuneCacheItem = {
+  petId: string;
+  dateKey: string;
+  petName: string;
+  petType: PetType;
+  petGender: PetGender;
+  isNeutered: boolean;
+  breed: string;
+  birthDate: string;
+  birthTime: string;
+  summary: string;
+  health: string;
+  appetite: string;
+  mood: string;
+  caution: string;
+  luckyColor: string;
+  luckyItem: string;
+  recommendedAction: string;
+};
+
+function getTodayKey() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function calculateAge(birthDate: string) {
+  const onlyNumbers = birthDate.replace(/\D/g, "");
+  if (onlyNumbers.length !== 8) return "나이 미확인";
+
+  const year = Number(onlyNumbers.slice(0, 4));
+  const month = Number(onlyNumbers.slice(4, 6));
+  const day = Number(onlyNumbers.slice(6, 8));
+
+  const today = new Date();
+  let age = today.getFullYear() - year;
+
+  const hasNotHadBirthdayYet =
+    today.getMonth() + 1 < month ||
+    (today.getMonth() + 1 === month && today.getDate() < day);
+
+  if (hasNotHadBirthdayYet) age -= 1;
+  if (age < 0) return "나이 미확인";
+
+  return `${age}살`;
+}
+
+async function saveFortuneHistory(item: FortuneHistoryItem) {
+  const saved = await AsyncStorage.getItem(FORTUNE_HISTORY_KEY);
+  const parsed = saved ? JSON.parse(saved) : [];
+  const current = Array.isArray(parsed) ? parsed : [];
+  const updated = [item, ...current].slice(0, 100);
+  await AsyncStorage.setItem(FORTUNE_HISTORY_KEY, JSON.stringify(updated));
+}
+
+async function saveDailyFortuneCache(item: DailyFortuneCacheItem) {
+  const saved = await AsyncStorage.getItem(DAILY_FORTUNE_CACHE_KEY);
+  const parsed = saved ? JSON.parse(saved) : {};
+  const current = parsed && typeof parsed === "object" ? parsed : {};
+  current[item.petId] = item;
+  await AsyncStorage.setItem(DAILY_FORTUNE_CACHE_KEY, JSON.stringify(current));
+}
 
 export default function LoadingScreen() {
   const params = useLocalSearchParams();
+  const lastRequestKeyRef = useRef<string | null>(null);
 
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const petId = String(params.petId ?? "");
+  const petName = String(params.petName ?? "코코");
+  const petType = String(params.petType ?? "dog") as PetType;
+  const petGender = String(params.petGender ?? "male") as PetGender;
+  const isNeutered = String(params.isNeutered ?? "false") === "true";
+  const breed = String(params.breed ?? "품종 미입력");
+  const birthDate = String(params.birthDate ?? "생일 미입력");
+  const birthTime = String(params.birthTime ?? "시간 모름");
 
-  const [messageIndex, setMessageIndex] = useState(0);
+  const requestKey = `${petId}|${petName}|${petType}|${petGender}|${isNeutered}|${breed}|${birthDate}|${birthTime}`;
+
+  const fortune = useMemo(async () => {
+    const savedHistory = await AsyncStorage.getItem(FORTUNE_HISTORY_KEY);
+    const parsedHistory = savedHistory ? JSON.parse(savedHistory) : [];
+    const history = Array.isArray(parsedHistory) ? parsedHistory : [];
+
+    return buildFortuneResult({
+      petId,
+      petName,
+      petType,
+      petGender,
+      isNeutered,
+      history,
+    });
+  }, [petId, petName, petType, petGender, isNeutered]);
 
   useEffect(() => {
-    // 🔄 회전 애니메이션
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 1800,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
+    if (lastRequestKeyRef.current === requestKey) return;
+    lastRequestKeyRef.current = requestKey;
 
-    // 🌫️ 페이드 인
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let isActive = true;
 
-    // 📝 메시지 변경
-    const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
-    }, 1200);
+    const run = async () => {
+      try {
+        const resolvedFortune = await fortune;
 
-    // ⏱️ 5초 후 이동
-    const timer = setTimeout(() => {
-      router.replace({
-        pathname: "/result" as const,
-        params: {
-          petName: String(params.petName ?? "코코"),
-          petType: String(params.petType ?? "dog"),
-          petGender: String(params.petGender ?? "male"),
-          isNeutered: String(params.isNeutered ?? "false"),
-          breed: String(params.breed ?? "품종 미입력"),
-          birthDate: String(params.birthDate ?? "생일 미입력"),
-          birthTime: String(params.birthTime ?? "시간 모름"),
-        },
-      });
-    }, 5000);
+        const historyItem: FortuneHistoryItem = {
+          id: `${Date.now()}-${petId}`,
+          petId,
+          createdAt: new Date().toISOString(),
+          petName,
+          petType,
+          petGender,
+          breed,
+          age: calculateAge(birthDate),
+          summary: resolvedFortune.summary,
+          health: resolvedFortune.health,
+          appetite: resolvedFortune.appetite,
+          mood: resolvedFortune.mood,
+          caution: resolvedFortune.caution,
+          luckyColor: resolvedFortune.luckyColor,
+          luckyItem: resolvedFortune.luckyItem,
+          recommendedAction: resolvedFortune.recommendedAction,
+          personalityKey: resolvedFortune.personalityKey,
+          moodKey: resolvedFortune.moodKey,
+          focusKey: resolvedFortune.focusKey,
+          cautionKey: resolvedFortune.cautionKey,
+        };
+
+        const dailyItem: DailyFortuneCacheItem = {
+          petId,
+          dateKey: getTodayKey(),
+          petName,
+          petType,
+          petGender,
+          isNeutered,
+          breed,
+          birthDate,
+          birthTime,
+          summary: resolvedFortune.summary,
+          health: resolvedFortune.health,
+          appetite: resolvedFortune.appetite,
+          mood: resolvedFortune.mood,
+          caution: resolvedFortune.caution,
+          luckyColor: resolvedFortune.luckyColor,
+          luckyItem: resolvedFortune.luckyItem,
+          recommendedAction: resolvedFortune.recommendedAction,
+        };
+
+        await Promise.all([
+          saveFortuneHistory(historyItem),
+          saveDailyFortuneCache(dailyItem),
+        ]);
+
+        if (!isActive) return;
+
+        timer = setTimeout(() => {
+          router.replace({
+            pathname: "/(tabs)/result",
+            params: {
+              petId,
+              petName,
+              petType,
+              petGender,
+              isNeutered: isNeutered ? "true" : "false",
+              breed,
+              birthDate,
+              birthTime,
+              summary: resolvedFortune.summary,
+              health: resolvedFortune.health,
+              appetite: resolvedFortune.appetite,
+              mood: resolvedFortune.mood,
+              caution: resolvedFortune.caution,
+              luckyColor: resolvedFortune.luckyColor,
+              luckyItem: resolvedFortune.luckyItem,
+              recommendedAction: resolvedFortune.recommendedAction,
+            },
+          });
+        }, 2200);
+      } catch (error) {
+        console.error("로딩 중 저장 실패", error);
+      }
+    };
+
+    run();
 
     return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
+      isActive = false;
+      if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [
+    requestKey,
+    petId,
+    petName,
+    petType,
+    petGender,
+    isNeutered,
+    breed,
+    birthDate,
+    birthTime,
+    fortune,
+  ]);
 
-  const rotate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
+  let LottieView: any = null;
+  if (Platform.OS !== "web") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      LottieView = require("lottie-react-native").default;
+    } catch {
+      LottieView = null;
+    }
+  }
 
   return (
-    <View style={styles.screen}>
-      <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
-        <Text style={styles.emoji}>🔮</Text>
+    <View style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.petIcon}>{petType === "cat" ? "🐱" : "🐶"}</Text>
 
-        {/* 회전 링 */}
-        <Animated.View
-          style={[
-            styles.circle,
-            {
-              transform: [{ rotate }],
-            },
-          ]}
-        />
+        {LottieView ? (
+          <LottieView
+            source={require("../assets/lottie/fortune-loading.json")}
+            autoPlay
+            loop
+            style={styles.lottie}
+          />
+        ) : (
+          <View style={styles.spinnerWrap}>
+            <ActivityIndicator size="large" color={COLORS.secondary} />
+          </View>
+        )}
 
-        <Text style={styles.title}>멍냥사주 보는 중...</Text>
-
-        <Text style={styles.subtitle}>
-          우리 아이의 운명을 정성껏 읽고 있어요
+        <Text style={styles.title}>우리 아이 운세 분석 중...</Text>
+        <Text style={styles.desc}>
+          {petName}의 오늘 기분과 흐름을 천천히 읽고 있어요
         </Text>
-
-        {/* 동적 메시지 */}
-        <View style={styles.messageBox}>
-          <Text style={styles.message}>
-            {LOADING_MESSAGES[messageIndex]}
-          </Text>
-        </View>
-
-        {/* 점 애니메이션 느낌 */}
-        <View style={styles.dotRow}>
-          <View style={[styles.dot, messageIndex % 3 === 0 && styles.dotActive]} />
-          <View style={[styles.dot, messageIndex % 3 === 1 && styles.dotActive]} />
-          <View style={[styles.dot, messageIndex % 3 === 2 && styles.dotActive]} />
-        </View>
-      </Animated.View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
-    backgroundColor: "#FFF9F3",
+    backgroundColor: COLORS.bg,
     justifyContent: "center",
-    padding: 20,
+    alignItems: "center",
+    paddingHorizontal: 24,
   },
   card: {
+    width: "100%",
+    maxWidth: 340,
     backgroundColor: "#FFFFFF",
     borderRadius: 28,
-    padding: 28,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     alignItems: "center",
   },
-  emoji: {
-    fontSize: 32,
-    marginBottom: 10,
+  petIcon: {
+    fontSize: 30,
+    marginBottom: 8,
   },
-  circle: {
+  lottie: {
+    width: 160,
+    height: 160,
+    marginBottom: 8,
+  },
+  spinnerWrap: {
     width: 120,
     height: 120,
-    borderRadius: 999,
-    borderWidth: 6,
-    borderColor: "#F2C7A5",
-    borderTopColor: "#2E2A27",
-    marginBottom: 14,
+    borderRadius: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
-    color: "#2E2A27",
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 15,
-    color: "#6F645C",
+    color: COLORS.text,
     textAlign: "center",
   },
-  messageBox: {
-    marginTop: 18,
-    backgroundColor: "#FFF4EA",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-  },
-  message: {
+  desc: {
+    marginTop: 10,
     fontSize: 14,
-    fontWeight: "700",
-    color: "#8C5A3C",
-  },
-  dotRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 16,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: "#E6D9CF",
-  },
-  dotActive: {
-    backgroundColor: "#2E2A27",
+    lineHeight: 22,
+    color: COLORS.subText,
+    textAlign: "center",
   },
 });

@@ -1,286 +1,745 @@
-import { router, useLocalSearchParams } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
-import type { PetGender, PetType } from "../types";
+import type { SavedPetProfile } from "../types";
 
-function getPetVisual(petType: PetType, breed: string) {
-  const lower = breed.toLowerCase();
+const PET_STORAGE_KEY = "mungnyang-pet-profiles";
+const CURRENT_PET_KEY = "mungnyang-current-pet";
+const COMPATIBILITY_HISTORY_KEY = "mungnyang-compatibility-history";
 
-  if (petType === "dog") {
-    if (lower.includes("말티즈")) return "🐶";
-    if (lower.includes("포메")) return "🐕";
-    if (lower.includes("푸들")) return "🐩";
-    if (lower.includes("시츄")) return "🐶";
-    if (lower.includes("리트리버")) return "🦮";
-    if (lower.includes("웰시")) return "🐕‍🦺";
-    return "🐶";
+type CompatibilityHistoryItem = {
+  id: string;
+  createdAt: string;
+  petId: string;
+  petName: string;
+  ownerBirthDate: string;
+  score: number;
+  relationTypeKey: string;
+  strengthKey: string;
+  cautionKey: string;
+  recoveryKey: string;
+  tipKey: string;
+  closingKey: string;
+};
+
+type CompatibilityResult = {
+  score: number;
+  title: string;
+  summary: string;
+  relationType: string;
+  strengths: string;
+  cautions: string;
+  recoveryStyle: string;
+  todayTip: string;
+  closing: string;
+  relationTypeKey: string;
+  strengthKey: string;
+  cautionKey: string;
+  recoveryKey: string;
+  tipKey: string;
+  closingKey: string;
+};
+
+type SelectorType = "year" | "month" | "day" | null;
+
+const currentYear = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 80 }, (_, i) => currentYear - i);
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+
+const relationTypes = [
+  {
+    key: "heart-bond",
+    title: "정서 교감형",
+    description:
+      "보호자와 반려동물이 감정적으로 빠르게 연결되는 타입이에요. 작은 표정이나 말투 변화에도 서로 영향을 많이 주고받는 편이에요.",
+  },
+  {
+    key: "play-buddy",
+    title: "장난 콤비형",
+    description:
+      "함께 놀거나 반응을 주고받을 때 가장 궁합이 잘 살아나는 타입이에요. 가볍고 밝은 에너지 안에서 교감이 깊어질 수 있어요.",
+  },
+  {
+    key: "healing-pair",
+    title: "힐링 안정형",
+    description:
+      "서로의 존재만으로도 안정감을 느끼는 조합이에요. 큰 자극보다 일상 속 루틴에서 만족도가 높게 올라갈 수 있어요.",
+  },
+  {
+    key: "care-balance",
+    title: "보살핌 균형형",
+    description:
+      "보호자가 살피고 반려동물이 반응하는 흐름이 자연스럽게 이어지는 타입이에요. 섬세한 케어가 관계 만족도를 크게 올려줘요.",
+  },
+  {
+    key: "trust-grow",
+    title: "신뢰 성장형",
+    description:
+      "처음보다 시간이 갈수록 궁합이 더 좋아지는 타입이에요. 천천히 쌓이는 신뢰가 관계의 가장 큰 힘이 돼요.",
+  },
+  {
+    key: "routine-sync",
+    title: "생활 리듬형",
+    description:
+      "생활 패턴과 루틴이 잘 맞을수록 궁합이 크게 좋아지는 조합이에요. 안정적인 시간표가 서로를 편안하게 해줘요.",
+  },
+];
+
+const strengthPool = [
+  {
+    key: "warm-reaction",
+    text: "서로의 반응을 빠르게 알아차리는 편이라 감정 교감이 자연스럽게 이어질 가능성이 커요.",
+  },
+  {
+    key: "easy-bonding",
+    text: "짧은 시간이라도 함께 보내는 밀도가 높아서 교감 만족도가 크게 올라갈 수 있어요.",
+  },
+  {
+    key: "routine-comfort",
+    text: "익숙한 루틴을 같이 지킬 때 관계 안정감이 눈에 띄게 좋아질 수 있어요.",
+  },
+  {
+    key: "trust-energy",
+    text: "기본적으로 신뢰를 쌓아가는 흐름이 좋아서 시간이 갈수록 더 편안한 관계가 될 가능성이 커요.",
+  },
+  {
+    key: "play-chemistry",
+    text: "놀이와 리액션에서 합이 잘 맞는 편이라 함께 있는 시간이 재미로 연결되기 쉬워요.",
+  },
+  {
+    key: "healing-vibe",
+    text: "과한 표현이 없어도 서로에게 안정감을 주는 조합이라 조용한 만족도가 높을 수 있어요.",
+  },
+  {
+    key: "care-instinct",
+    text: "보호자가 챙겨주고 반려동물이 반응하는 흐름이 자연스러워서 케어 만족감이 높게 쌓일 수 있어요.",
+  },
+  {
+    key: "emotional-match",
+    text: "감정 텐션이 크게 어긋나지 않아 서로를 편안하게 느낄 가능성이 높아요.",
+  },
+];
+
+const cautionPool = [
+  {
+    key: "too-sensitive",
+    text: "서로의 예민한 순간이 겹치면 평소보다 작은 자극도 크게 느껴질 수 있어요.",
+  },
+  {
+    key: "reaction-gap",
+    text: "원하는 반응 속도가 다르면 서운함이나 답답함이 생길 수 있으니 템포를 맞추는 게 중요해요.",
+  },
+  {
+    key: "over-care",
+    text: "보호자가 너무 많이 신경 쓸수록 오히려 반려동물이 부담을 느낄 수 있어요.",
+  },
+  {
+    key: "routine-break",
+    text: "생활 패턴이 흔들릴 때 관계 만족도도 같이 떨어질 수 있으니 루틴 유지가 중요해요.",
+  },
+  {
+    key: "over-excited",
+    text: "신난 흐름이 커질 때는 힘 조절이 어려워질 수 있어요. 즐거움과 진정의 균형이 필요해요.",
+  },
+  {
+    key: "distance-mismatch",
+    text: "붙어 있고 싶은 타이밍과 혼자 있고 싶은 타이밍이 어긋날 때 미묘한 거리감이 생길 수 있어요.",
+  },
+  {
+    key: "mood-swing",
+    text: "기분 변화가 큰 날에는 평소보다 상대 반응을 더 민감하게 받아들일 수 있어요.",
+  },
+  {
+    key: "small-misread",
+    text: "좋은 의도였어도 표현 방식이 다르면 서로를 오해할 수 있으니 반응을 천천히 확인해 주세요.",
+  },
+];
+
+const recoveryPool = [
+  {
+    key: "quiet-time",
+    text: "조용한 시간과 익숙한 공간을 먼저 회복 지점으로 잡아주는 게 좋아요.",
+  },
+  {
+    key: "short-touch",
+    text: "길고 과한 교감보다 짧고 부드러운 반응이 관계를 더 빨리 회복시켜줄 수 있어요.",
+  },
+  {
+    key: "play-reset",
+    text: "가벼운 놀이 한 번으로도 분위기가 풀릴 수 있는 조합이에요. 단, 너무 길게 끌지는 않는 게 좋아요.",
+  },
+  {
+    key: "routine-reset",
+    text: "식사, 산책, 휴식 같은 익숙한 루틴으로 돌아가는 것이 가장 빠른 회복 방법일 수 있어요.",
+  },
+  {
+    key: "warm-voice",
+    text: "차분한 말투와 일정한 반응이 긴장을 빠르게 낮추는 데 도움이 될 수 있어요.",
+  },
+  {
+    key: "space-first",
+    text: "바로 다가가기보다 먼저 공간을 보장해 주는 것이 오히려 신뢰 회복에 더 좋아요.",
+  },
+];
+
+const tipPool = [
+  {
+    key: "tip-eye-contact",
+    text: "오늘은 눈맞춤과 짧은 칭찬을 자주 주는 것이 교감운을 올리는 포인트예요.",
+  },
+  {
+    key: "tip-routine",
+    text: "오늘은 평소보다 루틴을 일정하게 지켜주는 것이 궁합 만족도를 높여줄 수 있어요.",
+  },
+  {
+    key: "tip-rest",
+    text: "오늘은 놀아주는 시간 못지않게 쉬는 시간을 예쁘게 만들어주는 게 중요해요.",
+  },
+  {
+    key: "tip-snack",
+    text: "좋아하는 간식이나 보상 타이밍을 잘 잡으면 관계 흐름이 더 부드럽게 이어질 수 있어요.",
+  },
+  {
+    key: "tip-touch",
+    text: "무리한 스킨십보다 반응을 살피며 짧게 교감하는 방식이 특히 잘 맞는 날이에요.",
+  },
+  {
+    key: "tip-walk",
+    text: "산책이나 이동 시간의 리듬을 편안하게 맞춰주는 것이 오늘 궁합 포인트가 될 수 있어요.",
+  },
+  {
+    key: "tip-praise",
+    text: "오늘은 작은 행동에도 바로 칭찬해 주면 서로의 만족감이 더 커질 수 있어요.",
+  },
+  {
+    key: "tip-calm",
+    text: "과한 자극보다 조용하고 안정적인 분위기를 유지하는 것이 오늘 관계운에 더 좋아요.",
+  },
+];
+
+const closingPool = [
+  {
+    key: "closing-1",
+    text: "전체적으로는 서로에게 안정감을 줄 가능성이 높은 궁합이에요. 오늘은 속도보다 분위기를 맞추는 데 집중하면 더 좋아질 수 있어요.",
+  },
+  {
+    key: "closing-2",
+    text: "기본적으로 흐름이 좋은 조합이지만, 작은 반응 차이를 세심하게 봐줄수록 만족도가 더 높아질 수 있어요.",
+  },
+  {
+    key: "closing-3",
+    text: "함께 보내는 시간의 길이보다 질이 더 중요한 궁합이에요. 짧아도 밀도 있는 교감이 큰 힘이 될 수 있어요.",
+  },
+  {
+    key: "closing-4",
+    text: "정서적으로 잘 이어질 가능성이 높은 관계라, 차분한 리듬만 유지하면 점점 더 편안한 궁합으로 자리 잡을 수 있어요.",
+  },
+  {
+    key: "closing-5",
+    text: "서로의 타이밍을 조금만 더 읽어주면 아주 좋은 흐름으로 이어질 수 있는 조합이에요.",
+  },
+  {
+    key: "closing-6",
+    text: "전반적으로 궁합 밸런스가 좋은 편이에요. 오늘은 무리하지 않고 편안한 분위기를 유지하는 것이 핵심이에요.",
+  },
+];
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   }
-
-  if (petType === "cat") {
-    if (lower.includes("코숏")) return "🐱";
-    if (lower.includes("페르시안")) return "🐈";
-    if (lower.includes("러시안")) return "🐈‍⬛";
-    if (lower.includes("먼치킨")) return "🐱";
-    if (lower.includes("스핑크스")) return "🐈";
-    return "🐱";
-  }
-
-  return "🐾";
+  return hash;
 }
 
-function calculateAge(birthDate: string) {
-  const onlyNumbers = birthDate.replace(/\D/g, "");
+function getTodayKey() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
+function formatBirthDate(year?: number, month?: number, day?: number) {
+  if (!year || !month || !day) return "";
+  return `${year}.${String(month).padStart(2, "0")}.${String(day).padStart(2, "0")}`;
+}
+
+function parseBirthDateToParts(value: string) {
+  const onlyNumbers = value.replace(/\D/g, "");
   if (onlyNumbers.length !== 8) {
-    return "나이 미확인";
-  }
-
-  const year = Number(onlyNumbers.slice(0, 4));
-  const month = Number(onlyNumbers.slice(4, 6));
-  const day = Number(onlyNumbers.slice(6, 8));
-
-  const today = new Date();
-  let age = today.getFullYear() - year;
-
-  const hasNotHadBirthdayYet =
-    today.getMonth() + 1 < month ||
-    (today.getMonth() + 1 === month && today.getDate() < day);
-
-  if (hasNotHadBirthdayYet) {
-    age -= 1;
-  }
-
-  if (age < 0) {
-    return "나이 미확인";
-  }
-
-  return `${age}살`;
-}
-
-function getCompatibilityData(
-  petType: PetType,
-  petGender: PetGender,
-  isNeutered: boolean
-) {
-  if (petType === "dog") {
-    if (petGender === "female") {
-      return {
-        score: 91,
-        title: "다정한 애착형 궁합",
-        summary:
-          "서로의 반응을 잘 읽고 감정 교류가 빠르게 만들어지는 조합이에요. 사랑받는 느낌을 주는 보호자와 특히 잘 맞아요.",
-        strengths: [
-          "보호자의 말투와 분위기에 잘 반응하며 정서적 교감이 빨라요.",
-          "칭찬, 쓰다듬기, 눈맞춤 같은 작은 애정 표현이 관계를 크게 키워줘요.",
-          "익숙한 루틴 안에서 보호자와 함께하는 시간을 특히 좋아할 가능성이 커요.",
-        ],
-        cautions: [
-          "예민한 날에는 과한 장난이나 반복된 반응 요구가 부담이 될 수 있어요.",
-          "분위기가 어수선하면 애교보다 예민함이 먼저 올라올 수 있어요.",
-        ],
-        tips: isNeutered
-          ? [
-              "편안한 루틴을 유지해주면 신뢰감이 더 깊어져요.",
-              "짧고 부드러운 교감이 오래 가는 안정감을 만들어줘요.",
-            ]
-          : [
-              "사랑스럽다고 계속 몰아붙이기보다 반응의 템포를 맞춰주세요.",
-              "기분이 좋을 때 놀아주고, 피곤한 신호가 보이면 바로 쉬게 해주세요.",
-            ],
-      };
-    }
-
-    return {
-      score: 88,
-      title: "에너지 교류형 궁합",
-      summary:
-        "함께 반응하고 움직일수록 가까워지는 조합이에요. 리액션이 분명한 보호자와 특히 잘 맞는 흐름이에요.",
-      strengths: [
-        "칭찬, 놀이, 산책 같은 활동성 있는 교감에서 관계가 빠르게 깊어질 수 있어요.",
-        "보호자의 반응이 좋을수록 자신감과 애정 표현이 함께 살아날 수 있어요.",
-        "함께 무언가를 하는 시간이 많을수록 신뢰가 잘 쌓여요.",
-      ],
-      cautions: [
-        "흥분이 너무 길어지면 집중이 흐트러지거나 예민해질 수 있어요.",
-        "재미있는 상황이 많을수록 쉬는 타이밍도 함께 챙겨줘야 해요.",
-      ],
-      tips: isNeutered
-        ? [
-            "짧고 규칙적인 놀이가 관계를 안정적으로 만들어줘요.",
-            "보호자가 리듬을 잡아주면 훨씬 편안한 관계가 돼요.",
-          ]
-        : [
-            "신났을 때 브레이크 역할을 해주는 보호자일수록 궁합이 좋아요.",
-            "놀아줄 때와 쉬게 할 때의 기준을 분명하게 주면 더 안정돼요.",
-          ],
-    };
-  }
-
-  if (petGender === "female") {
-    return {
-      score: 90,
-      title: "섬세한 신뢰형 궁합",
-      summary:
-        "강한 자극보다 조용한 안정감 속에서 관계가 깊어지는 조합이에요. 배려형 보호자와 특히 잘 맞아요.",
-      strengths: [
-        "억지로 다가오기보다 기다려주는 보호자에게 마음을 더 잘 열어요.",
-        "관계가 깊어질수록 은근하고 조용한 애정 표현이 많아질 수 있어요.",
-        "편안한 공간과 예측 가능한 루틴 속에서 신뢰가 단단해져요.",
-      ],
-      cautions: [
-        "갑작스러운 터치, 큰 소리, 과한 관심은 스트레스로 느껴질 수 있어요.",
-        "불편함이 생기면 감정을 바로 표현하지 않고 거리부터 둘 수 있어요.",
-      ],
-      tips: isNeutered
-        ? [
-            "조용히 곁에 있어주는 방식이 큰 안정감을 줘요.",
-            "자기만의 공간과 쉬는 시간을 존중해주면 관계가 더 편안해져요.",
-          ]
-        : [
-            "먼저 다가오길 기다려주는 태도가 중요해요.",
-            "좋아하는 것과 싫어하는 것을 빨리 읽어주는 보호자와 잘 맞아요.",
-          ],
-    };
+    return { year: undefined, month: undefined, day: undefined };
   }
 
   return {
-    score: 86,
-    title: "거리 존중형 궁합",
-    summary:
-      "천천히 가까워질수록 더 오래 가는 관계예요. 적당한 거리와 선택권을 존중해주는 보호자와 잘 맞아요.",
-    strengths: [
-      "조용한 동행, 안정적인 존재감, 무리 없는 교감에서 신뢰가 잘 생겨요.",
-      "보호자가 감정을 크게 흔들지 않을수록 마음을 편하게 열 수 있어요.",
-      "자기 페이스를 존중받는 관계에서 은근한 애정 표현이 살아나요.",
-    ],
-    cautions: [
-      "과한 접촉이나 반복된 관심 요구는 피로하게 느껴질 수 있어요.",
-      "불편한 환경에서는 관계보다 회피가 먼저 나올 수 있어요.",
-    ],
-    tips: isNeutered
-      ? [
-          "익숙한 시간대, 익숙한 자리, 익숙한 방식이 가장 잘 맞아요.",
-          "조용히 함께 있어주는 시간이 관계를 안정적으로 만들어줘요.",
-        ]
-      : [
-          "눈치 빠르게 다가가기보다 반응을 보고 천천히 교감해 주세요.",
-          "스스로 다가오는 순간을 놓치지 않고 받아주는 게 중요해요.",
-        ],
+    year: Number(onlyNumbers.slice(0, 4)),
+    month: Number(onlyNumbers.slice(4, 6)),
+    day: Number(onlyNumbers.slice(6, 8)),
   };
 }
 
+function getDaysInMonth(year?: number, month?: number) {
+  if (!year || !month) return [];
+  const days = new Date(year, month, 0).getDate();
+  return Array.from({ length: days }, (_, i) => i + 1);
+}
+
+function pickNonRecent<T extends { key: string }>(
+  pool: T[],
+  seed: number,
+  recentKeys: string[]
+) {
+  const filtered = pool.filter((item) => !recentKeys.includes(item.key));
+  const source = filtered.length > 0 ? filtered : pool;
+  return source[seed % source.length];
+}
+
+function buildCompatibilityResult(args: {
+  pet: SavedPetProfile;
+  ownerBirthDate: string;
+  history: CompatibilityHistoryItem[];
+}): CompatibilityResult {
+  const { pet, ownerBirthDate, history } = args;
+
+  const todayKey = getTodayKey();
+  const baseSeed = hashString(
+    `${pet.id}|${pet.petName}|${pet.petType}|${pet.petGender}|${pet.breed}|${ownerBirthDate}|${todayKey}`
+  );
+
+  const petHistory = history.filter((item) => item.petId === pet.id).slice(0, 7);
+
+  const recentRelation = petHistory.map((item) => item.relationTypeKey);
+  const recentStrength = petHistory.map((item) => item.strengthKey);
+  const recentCaution = petHistory.map((item) => item.cautionKey);
+  const recentRecovery = petHistory.map((item) => item.recoveryKey);
+  const recentTip = petHistory.map((item) => item.tipKey);
+  const recentClosing = petHistory.map((item) => item.closingKey);
+
+  const relation = pickNonRecent(relationTypes, baseSeed + 1, recentRelation);
+  const strength = pickNonRecent(strengthPool, baseSeed + 2, recentStrength);
+  const caution = pickNonRecent(cautionPool, baseSeed + 3, recentCaution);
+  const recovery = pickNonRecent(recoveryPool, baseSeed + 4, recentRecovery);
+  const tip = pickNonRecent(tipPool, baseSeed + 5, recentTip);
+  const closing = pickNonRecent(closingPool, baseSeed + 6, recentClosing);
+
+  const scoreBase = 72 + (baseSeed % 24);
+  const scoreAdjust =
+    pet.petType === "dog"
+      ? 2
+      : 0 + (pet.petGender === "female" ? 1 : 0) + (pet.isNeutered ? 1 : 0);
+
+  const score = Math.min(98, scoreBase + scoreAdjust);
+
+  const title =
+    score >= 92
+      ? "찰떡궁합"
+      : score >= 86
+      ? "좋은 흐름"
+      : score >= 80
+      ? "균형 잡힌 궁합"
+      : "천천히 깊어지는 궁합";
+
+  const summary = `${pet.petName}와 보호자는 현재 "${relation.title}" 흐름이 강하게 느껴져요. ${relation.description}`;
+
+  return {
+    score,
+    title,
+    summary,
+    relationType: relation.description,
+    strengths: strength.text,
+    cautions: caution.text,
+    recoveryStyle: recovery.text,
+    todayTip: tip.text,
+    closing: closing.text,
+    relationTypeKey: relation.key,
+    strengthKey: strength.key,
+    cautionKey: caution.key,
+    recoveryKey: recovery.key,
+    tipKey: tip.key,
+    closingKey: closing.key,
+  };
+}
+
+function SelectorModal({
+  visible,
+  title,
+  options,
+  selectedValue,
+  onSelect,
+  onClose,
+  formatLabel,
+}: {
+  visible: boolean;
+  title: string;
+  options: Array<number | string>;
+  selectedValue?: number | string;
+  onSelect: (value: number | string) => void;
+  onClose: () => void;
+  formatLabel?: (value: number | string) => string;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>{title}</Text>
+
+          <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+            {options.map((option) => {
+              const isSelected = selectedValue === option;
+
+              return (
+                <Pressable
+                  key={String(option)}
+                  style={[
+                    styles.modalOptionButton,
+                    isSelected && styles.modalOptionButtonActive,
+                  ]}
+                  onPress={() => {
+                    onSelect(option);
+                    onClose();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      isSelected && styles.modalOptionTextActive,
+                    ]}
+                  >
+                    {formatLabel ? formatLabel(option) : String(option)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <AppButton title="닫기" onPress={onClose} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function CompatibilityScreen() {
-  const params = useLocalSearchParams();
+  const [pets, setPets] = useState<SavedPetProfile[]>([]);
+  const [selectedPetId, setSelectedPetId] = useState("");
+  const [ownerBirthYear, setOwnerBirthYear] = useState<number | undefined>();
+  const [ownerBirthMonth, setOwnerBirthMonth] = useState<number | undefined>();
+  const [ownerBirthDay, setOwnerBirthDay] = useState<number | undefined>();
+  const [selectorType, setSelectorType] = useState<SelectorType>(null);
 
-  const petName = String(params.petName ?? "코코");
-  const petType = String(params.petType ?? "dog") as PetType;
-  const petGender = String(params.petGender ?? "male") as PetGender;
-  const breed = String(params.breed ?? "품종 미입력");
-  const birthDate = String(params.birthDate ?? "생일 미입력");
-  const birthTime = String(params.birthTime ?? "시간 모름");
-  const isNeutered = String(params.isNeutered ?? "false") === "true";
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<CompatibilityResult | null>(null);
 
-  const petEmoji = getPetVisual(petType, breed);
-  const petTypeLabel = petType === "cat" ? "고양이" : "강아지";
-  const petGenderLabel = petGender === "female" ? "여아" : "남아";
-  const petAge = calculateAge(birthDate);
-  const neuteredLabel = isNeutered ? "중성화 완료" : "중성화 미완료";
+  const dayOptions = useMemo(
+    () => getDaysInMonth(ownerBirthYear, ownerBirthMonth),
+    [ownerBirthYear, ownerBirthMonth]
+  );
 
-  const compatibility = getCompatibilityData(petType, petGender, isNeutered);
+  const selectedPet = useMemo(
+    () => pets.find((pet) => pet.id === selectedPetId) ?? null,
+    [pets, selectedPetId]
+  );
+
+  const ownerBirthDate = formatBirthDate(
+    ownerBirthYear,
+    ownerBirthMonth,
+    ownerBirthDay
+  );
+
+  const loadPets = useCallback(async () => {
+    try {
+      const [petsRaw, currentPetRaw] = await Promise.all([
+        AsyncStorage.getItem(PET_STORAGE_KEY),
+        AsyncStorage.getItem(CURRENT_PET_KEY),
+      ]);
+
+      const parsedPets = petsRaw ? JSON.parse(petsRaw) : [];
+      const petList: SavedPetProfile[] = Array.isArray(parsedPets) ? parsedPets : [];
+      setPets(petList);
+
+      if (currentPetRaw) {
+        const currentPet: SavedPetProfile = JSON.parse(currentPetRaw);
+        const exists = petList.some((pet) => pet.id === currentPet.id);
+        if (exists) {
+          setSelectedPetId(currentPet.id);
+          return;
+        }
+      }
+
+      if (petList.length > 0) {
+        setSelectedPetId(petList[0].id);
+      } else {
+        setSelectedPetId("");
+      }
+    } catch (error) {
+      console.error("반려동물 목록 불러오기 실패", error);
+      setPets([]);
+      setSelectedPetId("");
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPets();
+    }, [loadPets])
+  );
+
+  const handleAnalyze = async () => {
+    if (!selectedPet || !ownerBirthDate) return;
+
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const historyRaw = await AsyncStorage.getItem(COMPATIBILITY_HISTORY_KEY);
+      const parsedHistory = historyRaw ? JSON.parse(historyRaw) : [];
+      const history: CompatibilityHistoryItem[] = Array.isArray(parsedHistory)
+        ? parsedHistory
+        : [];
+
+      const generated = buildCompatibilityResult({
+        pet: selectedPet,
+        ownerBirthDate,
+        history,
+      });
+
+      const historyItem: CompatibilityHistoryItem = {
+        id: `${Date.now()}-${selectedPet.id}`,
+        createdAt: new Date().toISOString(),
+        petId: selectedPet.id,
+        petName: selectedPet.petName,
+        ownerBirthDate,
+        score: generated.score,
+        relationTypeKey: generated.relationTypeKey,
+        strengthKey: generated.strengthKey,
+        cautionKey: generated.cautionKey,
+        recoveryKey: generated.recoveryKey,
+        tipKey: generated.tipKey,
+        closingKey: generated.closingKey,
+      };
+
+      const updatedHistory = [historyItem, ...history].slice(0, 100);
+      await AsyncStorage.setItem(
+        COMPATIBILITY_HISTORY_KEY,
+        JSON.stringify(updatedHistory)
+      );
+
+      setTimeout(() => {
+        setResult(generated);
+        setIsLoading(false);
+      }, 2200);
+    } catch (error) {
+      console.error("궁합 분석 실패", error);
+      setIsLoading(false);
+    }
+  };
+
+  const birthDateLabel =
+    ownerBirthYear && ownerBirthMonth && ownerBirthDay
+      ? `${ownerBirthYear}년 ${ownerBirthMonth}월 ${ownerBirthDay}일`
+      : "년 / 월 / 일을 선택하세요";
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.heroCard}>
-        <View style={styles.heroBadge}>
-          <Text style={styles.heroBadgeText}>COMPATIBILITY</Text>
+    <>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.heroCard}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>COMPATIBILITY</Text>
+          </View>
+
+          <Text style={styles.heroTitle}>보호자 궁합 💞</Text>
+          <Text style={styles.heroSubtitle}>
+            보호자와 반려동물 사이의 관계 흐름을 더 섬세하게 분석해드려요.
+          </Text>
         </View>
 
-        <Text style={styles.heroTitle}>보호자와의 궁합 💞</Text>
-        <Text style={styles.heroSubtitle}>
-          우리 아이가 보호자와 어떤 방식으로 가장 편안하고 잘 맞는지 정리했어요.
-        </Text>
-      </View>
+        <SectionCard>
+          <Text style={styles.sectionTitle}>반려동물 선택</Text>
 
-      <SectionCard>
-        <Text style={styles.petName}>
-          {petEmoji} {petName} ({petAge})
-        </Text>
-        <Text style={styles.petMeta}>
-          {petTypeLabel} · {breed}
-        </Text>
-        <Text style={styles.subText}>
-          성별: {petGenderLabel} · {neuteredLabel}
-        </Text>
-        <Text style={styles.subText}>생일: {birthDate}</Text>
-        <Text style={styles.subText}>태어난 시간: {birthTime}</Text>
-      </SectionCard>
+          {pets.length === 0 ? (
+            <Text style={styles.helperText}>
+              등록된 반려동물이 없어요. 먼저 아이를 등록해 주세요.
+            </Text>
+          ) : (
+            <View style={styles.petChipWrap}>
+              {pets.map((pet) => {
+                const active = selectedPetId === pet.id;
+                return (
+                  <Pressable
+                    key={pet.id}
+                    style={[styles.petChip, active && styles.petChipActive]}
+                    onPress={() => setSelectedPetId(pet.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.petChipText,
+                        active && styles.petChipTextActive,
+                      ]}
+                    >
+                      {pet.petType === "cat" ? "🐱" : "🐶"} {pet.petName}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
-      <SectionCard>
-        <Text style={styles.sectionTitle}>궁합 점수</Text>
+          <Text style={[styles.sectionTitle, styles.spacedTitle]}>
+            보호자 생년월일
+          </Text>
 
-        <View style={styles.scoreCard}>
-          <Text style={styles.scoreNumber}>{compatibility.score}</Text>
-          <Text style={styles.scoreSuffix}>점</Text>
-        </View>
+          <View style={styles.birthRow}>
+            <Pressable
+              style={styles.dateSelectButton}
+              onPress={() => setSelectorType("year")}
+            >
+              <Text style={styles.dateSelectLabel}>
+                {ownerBirthYear ? `${ownerBirthYear}년` : "년 선택"}
+              </Text>
+            </Pressable>
 
-        <Text style={styles.compatibilityTitle}>{compatibility.title}</Text>
-        <Text style={styles.compatibilitySummary}>
-          {compatibility.summary}
-        </Text>
-      </SectionCard>
+            <Pressable
+              style={styles.dateSelectButton}
+              onPress={() => setSelectorType("month")}
+            >
+              <Text style={styles.dateSelectLabel}>
+                {ownerBirthMonth ? `${ownerBirthMonth}월` : "월 선택"}
+              </Text>
+            </Pressable>
 
-      <SectionCard>
-        <Text style={styles.sectionTitle}>잘 맞는 포인트</Text>
-
-        {compatibility.strengths.map((item, index) => (
-          <View key={index} style={styles.infoCard}>
-            <Text style={styles.infoTitle}>강점 {index + 1}</Text>
-            <Text style={styles.infoDesc}>{item}</Text>
+            <Pressable
+              style={styles.dateSelectButton}
+              onPress={() => setSelectorType("day")}
+            >
+              <Text style={styles.dateSelectLabel}>
+                {ownerBirthDay ? `${ownerBirthDay}일` : "일 선택"}
+              </Text>
+            </Pressable>
           </View>
-        ))}
-      </SectionCard>
 
-      <SectionCard>
-        <Text style={styles.sectionTitle}>조심하면 좋은 포인트</Text>
+          <Text style={styles.selectedDateText}>{birthDateLabel}</Text>
 
-        {compatibility.cautions.map((item, index) => (
-          <View key={index} style={styles.cautionCard}>
-            <Text style={styles.cautionTitle}>주의 {index + 1}</Text>
-            <Text style={styles.cautionDesc}>{item}</Text>
+          <View style={styles.actionWrap}>
+            <AppButton
+              title="궁합 분석하기"
+              onPress={handleAnalyze}
+              disabled={!selectedPet || !ownerBirthDate || isLoading}
+            />
           </View>
-        ))}
-      </SectionCard>
+        </SectionCard>
 
-      <SectionCard>
-        <Text style={styles.sectionTitle}>관계 팁</Text>
+        {isLoading && (
+          <SectionCard>
+            <View style={styles.loadingBox}>
+              <Text style={styles.loadingEmoji}>
+                {selectedPet?.petType === "cat" ? "🐱" : "🐶"}
+              </Text>
+              <ActivityIndicator size="large" color={COLORS.secondary} />
+              <Text style={styles.loadingTitle}>궁합 분석 중...</Text>
+              <Text style={styles.loadingDesc}>
+                서로의 리듬과 감정 흐름을 읽고 있어요.
+              </Text>
+            </View>
+          </SectionCard>
+        )}
 
-        {compatibility.tips.map((tip, index) => (
-          <View key={index} style={styles.tipRow}>
-            <Text style={styles.tipIndex}>{index + 1}</Text>
-            <Text style={styles.tipText}>{tip}</Text>
-          </View>
-        ))}
-      </SectionCard>
+        {!isLoading && result && (
+          <>
+            <SectionCard>
+              <View style={styles.scoreCard}>
+                <Text style={styles.scoreLabel}>COMPATIBILITY SCORE</Text>
+                <Text style={styles.scoreValue}>{result.score}점</Text>
+                <Text style={styles.scoreTitle}>{result.title}</Text>
+                <Text style={styles.scoreSummary}>{result.summary}</Text>
+              </View>
+            </SectionCard>
 
-      <View style={styles.buttonGroup}>
-        <AppButton
-          title="결과 화면으로 돌아가기"
-          onPress={() => router.back()}
-          variant="outline"
-        />
-        <AppButton
-          title="홈으로 돌아가기"
-          onPress={() => router.replace("/home")}
-        />
-      </View>
-    </ScrollView>
+            <SectionCard>
+              <Text style={styles.sectionTitle}>궁합 해석</Text>
+
+              <View style={styles.resultCard}>
+                <Text style={styles.resultCardTitle}>관계 타입</Text>
+                <Text style={styles.resultCardDesc}>{result.relationType}</Text>
+              </View>
+
+              <View style={styles.resultCard}>
+                <Text style={styles.resultCardTitle}>교감 강점</Text>
+                <Text style={styles.resultCardDesc}>{result.strengths}</Text>
+              </View>
+
+              <View style={styles.resultCard}>
+                <Text style={styles.resultCardTitle}>충돌 포인트</Text>
+                <Text style={styles.resultCardDesc}>{result.cautions}</Text>
+              </View>
+
+              <View style={styles.resultCard}>
+                <Text style={styles.resultCardTitle}>회복 방식</Text>
+                <Text style={styles.resultCardDesc}>{result.recoveryStyle}</Text>
+              </View>
+
+              <View style={styles.resultCard}>
+                <Text style={styles.resultCardTitle}>오늘의 궁합 팁</Text>
+                <Text style={styles.resultCardDesc}>{result.todayTip}</Text>
+              </View>
+            </SectionCard>
+
+            <SectionCard>
+              <Text style={styles.sectionTitle}>총평</Text>
+              <View style={styles.closingCard}>
+                <Text style={styles.closingText}>{result.closing}</Text>
+              </View>
+            </SectionCard>
+          </>
+        )}
+      </ScrollView>
+
+      <SelectorModal
+        visible={selectorType === "year"}
+        title="년 선택"
+        options={YEAR_OPTIONS}
+        selectedValue={ownerBirthYear}
+        onSelect={(value) => setOwnerBirthYear(Number(value))}
+        onClose={() => setSelectorType(null)}
+        formatLabel={(value) => `${value}년`}
+      />
+
+      <SelectorModal
+        visible={selectorType === "month"}
+        title="월 선택"
+        options={MONTH_OPTIONS}
+        selectedValue={ownerBirthMonth}
+        onSelect={(value) => setOwnerBirthMonth(Number(value))}
+        onClose={() => setSelectorType(null)}
+        formatLabel={(value) => `${value}월`}
+      />
+
+      <SelectorModal
+        visible={selectorType === "day"}
+        title="일 선택"
+        options={dayOptions}
+        selectedValue={ownerBirthDay}
+        onSelect={(value) => setOwnerBirthDay(Number(value))}
+        onClose={() => setSelectorType(null)}
+        formatLabel={(value) => `${value}일`}
+      />
+    </>
   );
 }
 
@@ -291,8 +750,8 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
+    paddingBottom: 44,
     gap: 16,
-    paddingBottom: 40,
   },
   heroCard: {
     backgroundColor: COLORS.primary,
@@ -323,124 +782,182 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#F5ECE5",
   },
-  petName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
-  petMeta: {
-    marginTop: 4,
-    color: COLORS.subText,
-  },
-  subText: {
-    marginTop: 6,
-    fontSize: 13,
-    color: COLORS.muted,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: COLORS.text,
+    marginBottom: 10,
+  },
+  spacedTitle: {
+    marginTop: 16,
+  },
+  helperText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.subText,
+  },
+  petChipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  petChip: {
+    backgroundColor: "#F7F2ED",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  petChipActive: {
+    backgroundColor: COLORS.accent,
+  },
+  petChipText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6B625C",
+  },
+  petChipTextActive: {
+    color: COLORS.text,
+  },
+  birthRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  dateSelectButton: {
+    flex: 1,
+    backgroundColor: "#F7F2ED",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  dateSelectLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  selectedDateText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: COLORS.muted,
+  },
+  actionWrap: {
+    marginTop: 18,
+  },
+  loadingBox: {
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  loadingEmoji: {
+    fontSize: 34,
     marginBottom: 12,
   },
-  scoreCard: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "center",
-    backgroundColor: COLORS.accentSoft,
-    borderRadius: 22,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-  },
-  scoreNumber: {
-    fontSize: 48,
-    fontWeight: "900",
-    color: COLORS.text,
-    lineHeight: 52,
-  },
-  scoreSuffix: {
-    marginLeft: 4,
-    marginBottom: 6,
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.secondary,
-  },
-  compatibilityTitle: {
+  loadingTitle: {
     marginTop: 14,
     fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  loadingDesc: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.subText,
+    textAlign: "center",
+  },
+  scoreCard: {
+    backgroundColor: "#FFF7EF",
+    borderRadius: 20,
+    padding: 18,
+    alignItems: "center",
+  },
+  scoreLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: COLORS.secondary,
+    letterSpacing: 0.6,
+  },
+  scoreValue: {
+    marginTop: 10,
+    fontSize: 40,
     fontWeight: "900",
     color: COLORS.text,
-    textAlign: "center",
   },
-  compatibilitySummary: {
-    marginTop: 10,
+  scoreTitle: {
+    marginTop: 6,
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  scoreSummary: {
+    marginTop: 12,
     fontSize: 14,
     lineHeight: 22,
     color: COLORS.subText,
     textAlign: "center",
   },
-  infoCard: {
-    backgroundColor: COLORS.bg,
-    borderRadius: 18,
+  resultCard: {
+    backgroundColor: "#F7F2ED",
+    borderRadius: 16,
     padding: 14,
     marginTop: 10,
   },
-  infoTitle: {
+  resultCardTitle: {
     fontSize: 15,
     fontWeight: "800",
     color: COLORS.text,
   },
-  infoDesc: {
-    marginTop: 8,
+  resultCardDesc: {
+    marginTop: 6,
     fontSize: 14,
     lineHeight: 22,
     color: COLORS.subText,
   },
-  cautionCard: {
-    backgroundColor: "#FFF3F0",
+  closingCard: {
+    backgroundColor: "#FFF8F0",
     borderRadius: 18,
-    padding: 14,
-    marginTop: 10,
+    padding: 16,
   },
-  cautionTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#A0523D",
-  },
-  cautionDesc: {
-    marginTop: 8,
+  closingText: {
     fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.subText,
-  },
-  tipRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    backgroundColor: COLORS.bg,
-    borderRadius: 18,
-    padding: 14,
-    marginTop: 10,
-  },
-  tipIndex: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.accent,
-    textAlign: "center",
     lineHeight: 24,
-    fontSize: 12,
+    color: COLORS.text,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "70%",
+  },
+  modalTitle: {
+    fontSize: 20,
     fontWeight: "800",
     color: COLORS.text,
-    overflow: "hidden",
+    marginBottom: 12,
   },
-  tipText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.subText,
+  modalList: {
+    marginBottom: 14,
   },
-  buttonGroup: {
-    gap: 10,
+  modalOptionButton: {
+    backgroundColor: "#F7F2ED",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  modalOptionButtonActive: {
+    backgroundColor: COLORS.accent,
+  },
+  modalOptionText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  modalOptionTextActive: {
+    color: COLORS.text,
   },
 });
