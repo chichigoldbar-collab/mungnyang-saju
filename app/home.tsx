@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
 const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
 const DAILY_FORTUNE_CACHE_KEY = "mungnyang-daily-fortune-cache";
+const NAME_RECOMMEND_HISTORY_KEY = "mungnyang-name-recommend-history";
 
 type SavedPetProfile = {
   id: string;
@@ -63,12 +64,27 @@ type NameStyle =
   | "korean"
   | "unique";
 
-type NameKind = "hangul" | "nickname" | "neutral" | "global";
+type NameKind = "animation" | "art" | "myth" | "meaning";
+type RegionTag = "korean" | "global";
 
-type GeneratedNameItem = {
+type NameCandidate = {
   name: string;
-  tags: string[];
+  kinds: NameKind[];
+  moodTags: NameStyle[];
+  regionTags: RegionTag[];
+  petTypes: Array<PetType | "all">;
+  genders: Array<PetGender | "all">;
+  source: string;
   meaning: string;
+  story: string;
+};
+
+type RecommendedNameItem = {
+  name: string;
+  source: string;
+  meaning: string;
+  story: string;
+  tags: string[];
 };
 
 const STYLE_OPTIONS: Array<{ key: NameStyle; label: string }> = [
@@ -81,50 +97,11 @@ const STYLE_OPTIONS: Array<{ key: NameStyle; label: string }> = [
 ];
 
 const KIND_OPTIONS: Array<{ key: NameKind; label: string }> = [
-  { key: "hangul", label: "한글 이름" },
-  { key: "nickname", label: "별명 느낌" },
-  { key: "neutral", label: "중성적 이름" },
-  { key: "global", label: "글로벌 감성" },
+  { key: "animation", label: "애니 · 영화" },
+  { key: "art", label: "명화 · 예술" },
+  { key: "myth", label: "신화 · 전설" },
+  { key: "meaning", label: "좋은 의미" },
 ];
-
-const meaningMap: Record<NameStyle, string[]> = {
-  cute: [
-    "귀엽고 친근한 인상이 살아나는 이름이에요.",
-    "애칭처럼 부르기 좋아서 정이 빨리 붙는 이름이에요.",
-    "사랑스럽고 통통 튀는 분위기를 잘 살려줘요.",
-    "듣자마자 미소가 나는 귀여운 무드의 이름이에요.",
-  ],
-  soft: [
-    "부드럽고 포근한 인상을 주는 이름이에요.",
-    "차분하면서도 따뜻한 분위기가 느껴져요.",
-    "잔잔하고 편안한 매력을 잘 살리는 이름이에요.",
-    "부르면 안정감이 느껴지는 무드의 이름이에요.",
-  ],
-  luxury: [
-    "고급스럽고 세련된 분위기를 잘 살려주는 이름이에요.",
-    "또렷하면서도 우아한 인상을 주는 이름이에요.",
-    "품위 있고 정돈된 매력이 느껴지는 이름이에요.",
-    "단정하면서도 특별한 분위기를 담은 이름이에요.",
-  ],
-  trendy: [
-    "요즘 감성에 잘 어울리는 세련된 이름이에요.",
-    "가볍고 센스 있는 분위기가 느껴지는 이름이에요.",
-    "짧고 감각적이라 기억에 잘 남는 이름이에요.",
-    "트렌디하면서도 부르기 편한 매력이 있어요.",
-  ],
-  korean: [
-    "한국적인 울림이 살아 있는 이름이에요.",
-    "익숙하면서도 정감 있는 느낌이 드는 이름이에요.",
-    "자연스럽고 따뜻한 한국어 무드를 담은 이름이에요.",
-    "부드러운 한글 발음이 매력적인 이름이에요.",
-  ],
-  unique: [
-    "희소성이 느껴져서 더 특별하게 기억되는 이름이에요.",
-    "흔하지 않아서 우리 아이만의 개성이 살아나요.",
-    "톡톡 튀는 개성과 존재감을 잘 담아낸 이름이에요.",
-    "조금 더 유니크하고 인상적인 무드의 이름이에요.",
-  ],
-};
 
 const tagLabelMap: Record<NameStyle | NameKind, string> = {
   cute: "귀여운",
@@ -133,65 +110,1057 @@ const tagLabelMap: Record<NameStyle | NameKind, string> = {
   trendy: "트렌디한",
   korean: "한국적인",
   unique: "유니크한",
-  hangul: "한글 이름",
-  nickname: "별명 느낌",
-  neutral: "중성적",
-  global: "글로벌 감성",
+  animation: "애니 · 영화",
+  art: "명화 · 예술",
+  myth: "신화 · 전설",
+  meaning: "좋은 의미",
 };
 
-const hangulStartMap: Record<NameStyle, string[]> = {
-  cute: ["보", "두", "모", "나", "또", "토", "루", "몽", "별", "아", "코", "초"],
-  soft: ["라", "유", "온", "하", "도", "은", "연", "서", "시", "구", "누", "다"],
-  luxury: ["리", "로", "세", "해", "담", "윤", "엘", "루", "채", "아", "태", "진"],
-  trendy: ["밀", "로", "하", "시", "유", "레", "라", "리", "노", "제", "태", "도"],
-  korean: ["가", "나", "다", "라", "온", "도", "보", "새", "한", "하", "초", "별"],
-  unique: ["시", "제", "루", "네", "도", "해", "진", "르", "라", "유", "채", "호"],
-};
+const NAME_CANDIDATES: NameCandidate[] = [
+  // animation / korean
+  {
+    name: "하니",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "한국 애니 《달려라 하니》",
+    meaning: "씩씩하고 사랑스러운 주인공의 이미지",
+    story:
+      "밝고 당찬 에너지가 있는 아이, 작아도 존재감이 분명한 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "둘리",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "한국 애니 《아기공룡 둘리》",
+    meaning: "장난기 많고 미워할 수 없는 개구쟁이 이미지",
+    story:
+      "장난꾸러기지만 정이 많이 가는 아이에게 잘 어울리는 대표적인 한국 감성 이름이에요.",
+  },
+  {
+    name: "또치",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean"],
+    regionTags: ["korean"],
+    petTypes: ["cat", "all"],
+    genders: ["female", "all"],
+    source: "한국 애니 《아기공룡 둘리》",
+    meaning: "새침하지만 귀여운 캐릭터 이미지",
+    story:
+      "도도하면서도 귀여운 분위기를 가진 아이, 고양이처럼 자기 페이스가 있는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "도우너",
+    kinds: ["animation"],
+    moodTags: ["unique", "korean", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "한국 애니 《아기공룡 둘리》",
+    meaning: "엉뚱하고 독특한 매력의 이미지",
+    story:
+      "조금 엉뚱하고 예측 불가한 매력이 있는 아이에게 잘 어울리는 한국 애니 스타일 이름이에요.",
+  },
+  {
+    name: "희동",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "한국 애니 《아기공룡 둘리》",
+    meaning: "복슬복슬하고 순한 이미지",
+    story:
+      "사람을 잘 따르고 포근한 인상을 주는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "뽀로로",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "한국 애니 《뽀롱뽀롱 뽀로로》",
+    meaning: "활발하고 밝은 대표 캐릭터 이미지",
+    story:
+      "늘 신나 있고, 반응이 빠르고, 함께 있으면 분위기가 밝아지는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "루피",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "한국 애니 《뽀롱뽀롱 뽀로로》",
+    meaning: "다정하고 사랑스러운 이미지",
+    story:
+      "포근하고 애교 많은 아이, 부드러운 인상을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "패티",
+    kinds: ["animation"],
+    moodTags: ["trendy", "korean", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "한국 애니 《뽀롱뽀롱 뽀로로》",
+    meaning: "단정하고 자신감 있는 이미지",
+    story:
+      "차분하지만 존재감이 있는 아이, 또렷한 인상을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "크롱",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "한국 애니 《뽀롱뽀롱 뽀로로》",
+    meaning: "짧고 귀엽고 반응 좋은 캐릭터 이미지",
+    story:
+      "짧고 입에 붙는 이름을 원할 때 좋고, 작고 귀여운 에너지가 있는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "콩순",
+    kinds: ["animation"],
+    moodTags: ["cute", "korean", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "한국 애니 《콩순이》",
+    meaning: "밝고 친근한 한국 아동 캐릭터 이미지",
+    story:
+      "사랑스럽고 귀여운 분위기를 가진 아이에게 잘 어울리는 따뜻한 한국형 이름이에요.",
+  },
+  {
+    name: "라바",
+    kinds: ["animation"],
+    moodTags: ["unique", "korean", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "한국 애니 《라바》",
+    meaning: "통통 튀고 유쾌한 이미지",
+    story:
+      "재밌고 장난기 많은 아이, 계속 웃음 나게 하는 매력을 가진 아이에게 잘 어울려요.",
+  },
+  {
+    name: "점박",
+    kinds: ["animation"],
+    moodTags: ["unique", "korean"],
+    regionTags: ["korean"],
+    petTypes: ["dog", "all"],
+    genders: ["male", "all"],
+    source: "한국 애니 영화 《점박이》",
+    meaning: "강하지만 가족을 지키는 이미지",
+    story:
+      "보호자와 가족을 잘 따르고 든든한 존재감을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
 
-const hangulEndMap: Record<NameStyle, string[]> = {
-  cute: ["리", "이", "루", "미", "야", "니", "몽", "또", "비", "코", "콩", "랑"],
-  soft: ["온", "유", "아", "이", "루", "담", "빈", "린", "율", "하", "서", "람"],
-  luxury: ["엘", "안", "온", "윤", "오", "린", "호", "아", "리", "르", "안", "유"],
-  trendy: ["오", "온", "유", "엘", "아", "리", "노", "호", "빈", "윤", "하", "제"],
-  korean: ["람", "결", "온", "빛", "별", "나", "리", "솔", "담", "아", "윤", "호"],
-  unique: ["엘", "온", "제", "루", "안", "호", "유", "람", "비", "르", "결", "린"],
-};
+  // animation / global
+  {
+    name: "엘사",
+    kinds: ["animation"],
+    moodTags: ["luxury", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "디즈니 《겨울왕국》",
+    meaning: "차분하고 우아한 얼음 공주의 이미지",
+    story:
+      "조용하지만 존재감이 크고, 맑고 도도한 분위기를 가진 아이에게 특히 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "안나",
+    kinds: ["animation"],
+    moodTags: ["cute", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "디즈니 《겨울왕국》",
+    meaning: "따뜻하고 적극적으로 마음을 표현하는 이미지",
+    story:
+      "사람을 잘 따르고 애정 표현이 많은 아이에게 잘 어울리는 다정한 이름이에요.",
+  },
+  {
+    name: "올라프",
+    kinds: ["animation"],
+    moodTags: ["cute", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "디즈니 《겨울왕국》",
+    meaning: "순수하고 해맑은 눈사람 캐릭터",
+    story:
+      "장난기 많고 보면 저절로 웃음이 나는 밝은 아이에게 특히 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "버즈",
+    kinds: ["animation"],
+    moodTags: ["trendy", "unique"],
+    regionTags: ["global"],
+    petTypes: ["dog", "all"],
+    genders: ["male", "all"],
+    source: "픽사 《토이 스토리》",
+    meaning: "용감하고 주인을 지키려는 장난감의 이미지",
+    story:
+      "보호자에게 충성심이 강하고 자신감 있는 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "우디",
+    kinds: ["animation"],
+    moodTags: ["soft", "cute"],
+    regionTags: ["global"],
+    petTypes: ["dog", "all"],
+    genders: ["male", "all"],
+    source: "픽사 《토이 스토리》",
+    meaning: "주인을 아끼고 끝까지 곁을 지키는 이미지",
+    story:
+      "보호자를 잘 따르고 정이 많은 아이에게 어울리는 따뜻한 스토리형 이름이에요.",
+  },
+  {
+    name: "심바",
+    kinds: ["animation"],
+    moodTags: ["trendy", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "디즈니 《라이온 킹》",
+    meaning: "용기와 성장, 왕의 기운을 품은 이미지",
+    story:
+      "씩씩하고 당당한 인상을 가진 아이에게 잘 맞는 이름이에요.",
+  },
+  {
+    name: "날라",
+    kinds: ["animation"],
+    moodTags: ["soft", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["cat", "all"],
+    genders: ["female", "all"],
+    source: "디즈니 《라이온 킹》",
+    meaning: "우아하고 강단 있는 이미지",
+    story:
+      "도도하면서도 보호자에게는 다정한 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "모아나",
+    kinds: ["animation"],
+    moodTags: ["unique", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "디즈니 《모아나》",
+    meaning: "자유롭고 바다 같은 생동감을 가진 이미지",
+    story:
+      "활발하고 호기심이 많으며 새로운 환경에도 금방 적응하는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "치히로",
+    kinds: ["animation"],
+    moodTags: ["soft", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "지브리 《센과 치히로의 행방불명》",
+    meaning: "순수하지만 단단하게 성장하는 이미지",
+    story:
+      "처음엔 조심스럽지만 시간이 갈수록 신뢰를 주는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "하울",
+    kinds: ["animation"],
+    moodTags: ["luxury", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "지브리 《하울의 움직이는 성》",
+    meaning: "신비롭고 세련된 존재감",
+    story:
+      "우아하고 조금은 특별한 분위기가 있는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "키키",
+    kinds: ["animation"],
+    moodTags: ["cute", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "지브리 《마녀 배달부 키키》",
+    meaning: "밝고 가볍고 사랑스러운 울림",
+    story:
+      "통통 튀고 애교가 많으며 보호자와의 교감이 빠른 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "토토로",
+    kinds: ["animation"],
+    moodTags: ["cute", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "지브리 《이웃집 토토로》",
+    meaning: "포근하고 편안하게 지켜주는 존재의 이미지",
+    story:
+      "보고만 있어도 마음이 편해지는 포근한 아이에게 특히 잘 어울리는 이름이에요.",
+  },
 
-const nicknameStartMap: Record<NameStyle, string[]> = {
-  cute: ["몽", "뽀", "코", "토", "보", "콩", "쪼", "호", "초", "루"],
-  soft: ["누", "모", "도", "구", "라", "유", "하", "온"],
-  luxury: ["루", "로", "레", "리", "엘", "세", "아"],
-  trendy: ["밀", "로", "레", "도", "유", "티", "노", "하"],
-  korean: ["별", "솔", "보", "다", "초", "해", "온"],
-  unique: ["시", "제", "르", "루", "해", "유", "채"],
-};
+  // art / korean
+  {
+    name: "혜원",
+    kinds: ["art"],
+    moodTags: ["korean", "soft", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "조선 화가 신윤복의 호",
+    meaning: "섬세하고 우아한 한국 미감",
+    story:
+      "부드럽고 예쁜 분위기, 은근한 고급스러움이 있는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "단원",
+    kinds: ["art"],
+    moodTags: ["korean", "unique", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "조선 화가 김홍도의 호",
+    meaning: "생동감 있고 한국적인 예술 감성",
+    story:
+      "표정이 풍부하고 생기 있는 아이에게 잘 어울리는 한국 예술 계열 이름이에요.",
+  },
+  {
+    name: "오원",
+    kinds: ["art"],
+    moodTags: ["korean", "unique", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "조선 화가 장승업의 호",
+    meaning: "자유롭고 강렬한 예술성",
+    story:
+      "개성이 뚜렷하고 쉽게 잊히지 않는 분위기의 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "중섭",
+    kinds: ["art"],
+    moodTags: ["korean", "soft", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "화가 이중섭",
+    meaning: "따뜻하고 정감 있는 한국 근대미술의 이미지",
+    story:
+      "작아도 마음을 끄는 정이 많고 진한 존재감을 가진 아이에게 잘 어울려요.",
+  },
+  {
+    name: "천경",
+    kinds: ["art"],
+    moodTags: ["korean", "luxury", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "화가 천경자",
+    meaning: "화려하고 이국적이면서도 깊은 한국적 감성",
+    story:
+      "눈빛이 인상적이고 분위기가 화려한 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "나혜",
+    kinds: ["art"],
+    moodTags: ["korean", "soft", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "화가 나혜석",
+    meaning: "단정하고 지적인 예술 감성",
+    story:
+      "차분하고 또렷한 매력을 가진 아이에게 잘 어울리는 한국 예술 이름이에요.",
+  },
+  {
+    name: "솔거",
+    kinds: ["art"],
+    moodTags: ["korean", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "신라 화가 솔거",
+    meaning: "한국 고전미술의 상징적인 이미지",
+    story:
+      "묵직하고 조금은 고풍스러운 분위기를 가진 아이에게 잘 어울려요.",
+  },
+  {
+    name: "수월",
+    kinds: ["art"],
+    moodTags: ["korean", "soft", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "한국 불화의 고요한 정서에서 착안",
+    meaning: "맑고 고요하게 흐르는 미감",
+    story:
+      "차분하고 은은한 분위기의 아이에게 잘 어울리는 한국적인 예술 이름이에요.",
+  },
 
-const nicknameEndMap: Record<NameStyle, string[]> = {
-  cute: ["이", "또", "몽", "콩", "링", "쭈", "비", "루", "야", "코"],
-  soft: ["이", "루", "미", "온", "아", "유", "담", "링"],
-  luxury: ["엘", "아", "온", "링", "유", "오", "르"],
-  trendy: ["오", "유", "링", "루", "아", "엘", "노"],
-  korean: ["이", "별", "솔", "담", "루", "아", "람"],
-  unique: ["제", "르", "엘", "온", "비", "루", "링"],
-};
+  // art / global
+  {
+    name: "모네",
+    kinds: ["art"],
+    moodTags: ["soft", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "화가 클로드 모네",
+    meaning: "빛과 색을 부드럽게 담아내는 인상주의의 이미지",
+    story:
+      "잔잔하고 감성적인 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "고흐",
+    kinds: ["art"],
+    moodTags: ["unique", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "화가 빈센트 반 고흐",
+    meaning: "강한 개성과 따뜻한 감성을 함께 가진 이미지",
+    story:
+      "눈빛이나 표정이 인상적이고 존재감이 분명한 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "클림트",
+    kinds: ["art"],
+    moodTags: ["luxury", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "화가 구스타프 클림트",
+    meaning: "황금빛의 화려함과 우아한 장식미",
+    story:
+      "고급스럽고 시선을 끄는 분위기를 가진 아이에게 어울리는 예술형 이름이에요.",
+  },
+  {
+    name: "르누아르",
+    kinds: ["art"],
+    moodTags: ["soft", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "화가 피에르 오귀스트 르누아르",
+    meaning: "따뜻하고 온화한 색감의 이미지",
+    story:
+      "사람을 편안하게 만드는 부드러운 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "세잔",
+    kinds: ["art"],
+    moodTags: ["unique", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "화가 폴 세잔",
+    meaning: "차분하고 구조감 있는 안정된 이미지",
+    story:
+      "과하지 않지만 묵직한 매력이 있는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "프리다",
+    kinds: ["art"],
+    moodTags: ["unique", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "화가 프리다 칼로",
+    meaning: "자기만의 개성과 강단을 가진 이미지",
+    story:
+      "작아도 존재감이 분명하고 자신만의 분위기가 있는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "달리",
+    kinds: ["art"],
+    moodTags: ["unique", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "화가 살바도르 달리",
+    meaning: "기발하고 독특한 상상력의 이미지",
+    story:
+      "조금 엉뚱하고 예측 불가한 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "미로",
+    kinds: ["art"],
+    moodTags: ["trendy", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "화가 호안 미로",
+    meaning: "가볍고 개성 있는 현대 예술 감성",
+    story:
+      "가볍고 센스 있는 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "마티스",
+    kinds: ["art"],
+    moodTags: ["luxury", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "화가 앙리 마티스",
+    meaning: "대담하고 세련된 색감의 이미지",
+    story:
+      "도도하고 세련된 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "드가",
+    kinds: ["art"],
+    moodTags: ["soft", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "화가 에드가 드가",
+    meaning: "우아하고 관찰적인 예술 감성",
+    story:
+      "차분하고 보는 맛이 있는 아이, 살펴볼수록 매력 있는 아이에게 잘 어울려요.",
+  },
 
-const neutralNames: string[] = [
-  "하루", "라온", "도담", "다온", "연우", "시온", "리안", "하온", "유온", "서온",
-  "로온", "하람", "온유", "채온", "라윤", "유람", "시우", "리우", "다율", "지온",
-  "태온", "윤하", "도윤", "하린", "서율", "연호", "하엘", "유빈", "리호", "도하",
-  "세온", "다빈", "시율", "유안", "하민", "로운", "다솔", "하결", "유결", "시안",
-  "가온", "해온", "은호", "유하", "리온", "시하", "온결", "서하", "하겸", "다해",
-  "라하", "유서", "하빈", "예온", "채하", "도연", "하윤", "시연", "라빈", "도온",
+  // myth / korean
+  {
+    name: "미르",
+    kinds: ["myth", "meaning"],
+    moodTags: ["korean", "unique", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "한국 설화 · 용의 이미지",
+    meaning: "강하지만 신비로운 존재감",
+    story:
+      "작아도 존재감이 묵직하거나 눈빛이 선명한 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "해치",
+    kinds: ["myth"],
+    moodTags: ["korean", "unique", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["dog", "all"],
+    genders: ["male", "all"],
+    source: "한국 상상 동물 해치",
+    meaning: "수호와 보호의 상징",
+    story:
+      "든든하고 씩씩한 분위기를 가진 아이, 집을 지키는 느낌의 아이에게 잘 어울려요.",
+  },
+  {
+    name: "바리",
+    kinds: ["myth"],
+    moodTags: ["korean", "soft", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "한국 신화 바리데기",
+    meaning: "강한 운명과 회복의 상징",
+    story:
+      "조용하지만 단단한 내면을 가진 아이, 오래 볼수록 깊은 매력이 느껴지는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "자청",
+    kinds: ["myth"],
+    moodTags: ["korean", "luxury", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "제주 신화 자청비",
+    meaning: "풍요와 생명의 이미지",
+    story:
+      "우아하면서도 생기 있는 분위기의 아이에게 잘 어울리는 한국 신화 이름이에요.",
+  },
+  {
+    name: "백호",
+    kinds: ["myth"],
+    moodTags: ["korean", "luxury", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "한국 사신 백호",
+    meaning: "강인함과 수호의 상징",
+    story:
+      "카리스마 있고 당당한 존재감을 가진 아이에게 특히 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "청룡",
+    kinds: ["myth"],
+    moodTags: ["korean", "unique", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "한국 사신 청룡",
+    meaning: "권위와 신비로운 힘의 상징",
+    story:
+      "존재감이 크고 신비로운 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "연화",
+    kinds: ["myth"],
+    moodTags: ["korean", "soft", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "한국 설화적 정서에서 착안",
+    meaning: "맑고 우아한 꽃의 상징",
+    story:
+      "부드럽고 깨끗한 인상을 가진 아이에게 잘 어울리는 한국 전설풍 이름이에요.",
+  },
+  {
+    name: "가람",
+    kinds: ["myth"],
+    moodTags: ["korean", "soft", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "한국적 자연·설화 감성",
+    meaning: "강처럼 흐르는 생명감",
+    story:
+      "자유롭고 흐름이 좋은 아이, 편안하게 곁에 머무는 아이에게 잘 어울려요.",
+  },
+
+  // myth / global
+  {
+    name: "아폴로",
+    kinds: ["myth"],
+    moodTags: ["luxury", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "그리스 신화",
+    meaning: "태양, 빛, 예술, 자신감의 이미지",
+    story:
+      "밝고 당당하며 리더 같은 존재감을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "아르테미스",
+    kinds: ["myth"],
+    moodTags: ["unique", "soft"],
+    regionTags: ["global"],
+    petTypes: ["cat", "all"],
+    genders: ["female", "all"],
+    source: "그리스 신화",
+    meaning: "자유롭고 독립적인 달의 여신 이미지",
+    story:
+      "자기 리듬이 분명하고 우아한 거리감이 있는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "토르",
+    kinds: ["myth"],
+    moodTags: ["trendy", "unique"],
+    regionTags: ["global"],
+    petTypes: ["dog", "all"],
+    genders: ["male", "all"],
+    source: "북유럽 신화",
+    meaning: "강함과 보호의 상징",
+    story:
+      "든든하고 용감한 느낌, 보호자를 지키는 듯한 인상을 주는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "로키",
+    kinds: ["myth"],
+    moodTags: ["unique", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "북유럽 신화",
+    meaning: "장난기와 영리함의 이미지",
+    story:
+      "머리 회전이 빠르고 장난기 많은 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "헤라",
+    kinds: ["myth"],
+    moodTags: ["luxury", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "그리스 신화",
+    meaning: "품위와 권위를 가진 여왕의 이미지",
+    story:
+      "우아하고 정돈된 존재감을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "아테나",
+    kinds: ["myth"],
+    moodTags: ["luxury", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "그리스 신화",
+    meaning: "지혜와 냉정한 균형의 이미지",
+    story:
+      "차분하고 똑똑한 인상을 주는 아이에게 특히 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "셀레네",
+    kinds: ["myth"],
+    moodTags: ["soft", "unique"],
+    regionTags: ["global"],
+    petTypes: ["cat", "all"],
+    genders: ["female", "all"],
+    source: "달의 여신",
+    meaning: "고요하고 은은한 달빛의 이미지",
+    story:
+      "차분하고 신비로운 느낌의 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "프레이야",
+    kinds: ["myth"],
+    moodTags: ["luxury", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "북유럽 신화",
+    meaning: "사랑과 아름다움의 상징",
+    story:
+      "고급스럽고 예쁜 분위기, 우아하게 시선을 끄는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "오딘",
+    kinds: ["myth"],
+    moodTags: ["unique", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["dog", "all"],
+    genders: ["male", "all"],
+    source: "북유럽 신화",
+    meaning: "지혜와 권위의 상징",
+    story:
+      "묵직한 존재감과 조금은 신비로운 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "에코",
+    kinds: ["myth"],
+    moodTags: ["soft", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "그리스 신화",
+    meaning: "메아리처럼 오래 남는 이미지",
+    story:
+      "은은하지만 한 번 보면 기억에 남는 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+
+  // meaning / korean
+  {
+    name: "하마",
+    kinds: ["meaning"],
+    moodTags: ["cute", "korean", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "하쿠나마타타에서 떠올린 별칭",
+    meaning: "괜찮아, 다 잘 될 거야라는 긍정의 이미지",
+    story:
+      "밝고 편안한 기운을 주는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "라온",
+    kinds: ["meaning"],
+    moodTags: ["korean", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "순우리말",
+    meaning: "즐거운, 기쁜",
+    story:
+      "가족에게 웃음과 밝은 에너지를 주는 아이에게 잘 어울리는 따뜻한 이름이에요.",
+  },
+  {
+    name: "다온",
+    kinds: ["meaning"],
+    moodTags: ["korean", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "좋은 것이 다 온다는 뜻의 느낌",
+    meaning: "좋은 기운이 가득 오는 이미지",
+    story:
+      "새 가족이 된 뒤 집안 분위기를 환하게 바꾸는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "해온",
+    kinds: ["meaning"],
+    moodTags: ["korean", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "따뜻한 햇살의 이미지",
+    meaning: "따뜻하게 비추는 존재",
+    story:
+      "집안 분위기를 포근하게 바꾸는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "온유",
+    kinds: ["meaning"],
+    moodTags: ["soft", "korean"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "온화하고 부드러운 성품의 의미",
+    meaning: "차분하고 순한 기운",
+    story:
+      "부드럽고 온순한 인상, 보호자에게 안정감을 주는 아이에게 특히 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "하랑",
+    kinds: ["meaning"],
+    moodTags: ["korean", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "함께의 느낌을 담은 이름",
+    meaning: "함께 오래가고 싶은 따뜻한 이미지",
+    story:
+      "가족과의 정이 깊게 쌓이는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "가온",
+    kinds: ["meaning"],
+    moodTags: ["korean", "trendy", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "순우리말",
+    meaning: "가운데, 중심",
+    story:
+      "가족의 중심처럼 사랑받는 아이, 존재감이 자연스럽게 큰 아이에게 잘 어울려요.",
+  },
+  {
+    name: "별",
+    kinds: ["meaning"],
+    moodTags: ["korean", "cute"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "반짝이는 존재를 비유한 이름",
+    meaning: "가족의 시선을 사로잡는 소중한 별 같은 이미지",
+    story:
+      "예쁘고 사랑스럽고 눈에 띄는 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "솔",
+    kinds: ["meaning"],
+    moodTags: ["korean", "soft"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "자연을 닮은 이름",
+    meaning: "소나무처럼 곧고 편안한 이미지",
+    story:
+      "차분하고 맑은 분위기를 가진 아이에게 잘 어울리는 단정한 이름이에요.",
+  },
+  {
+    name: "노을",
+    kinds: ["meaning"],
+    moodTags: ["korean", "soft", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "해질녘의 따뜻한 이미지",
+    meaning: "부드럽고 감성적인 빛의 느낌",
+    story:
+      "은은하고 예쁜 분위기, 보고 있으면 마음이 풀리는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "마루",
+    kinds: ["meaning"],
+    moodTags: ["korean", "trendy"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "하늘, 꼭대기의 의미",
+    meaning: "맑고 시원한 인상",
+    story:
+      "밝고 씩씩한 분위기, 반듯한 인상을 주는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "한결",
+    kinds: ["meaning"],
+    moodTags: ["korean", "soft", "luxury"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "늘 한결같은 마음의 의미",
+    meaning: "변함없고 안정적인 이미지",
+    story:
+      "보호자에게 꾸준히 위로를 주는 아이, 오래 갈수록 더 깊게 정드는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "윤슬",
+    kinds: ["meaning"],
+    moodTags: ["korean", "luxury", "unique"],
+    regionTags: ["korean"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "햇빛에 반짝이는 물결",
+    meaning: "반짝이고 감성적인 이미지",
+    story:
+      "조용하지만 눈에 들어오는 매력을 가진 아이에게 잘 어울리는 한국적 이름이에요.",
+  },
+
+  // meaning / global
+  {
+    name: "노바",
+    kinds: ["meaning"],
+    moodTags: ["trendy", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "새로운 별, 새로운 시작의 이미지",
+    meaning: "새로운 출발과 설렘",
+    story:
+      "새 가족이 된 순간을 특별하게 기억하고 싶은 경우 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "루미",
+    kinds: ["meaning"],
+    moodTags: ["soft", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "빛을 떠올리게 하는 이름",
+    meaning: "은은하게 빛나는 존재의 이미지",
+    story:
+      "작지만 반짝이는 분위기, 조용히 존재감을 남기는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "세라",
+    kinds: ["meaning"],
+    moodTags: ["soft", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "맑고 깨끗한 울림의 이름",
+    meaning: "정돈되고 부드러운 인상",
+    story:
+      "차분하고 깔끔한 분위기를 가진 아이에게 잘 어울려요.",
+  },
+  {
+    name: "모리",
+    kinds: ["meaning"],
+    moodTags: ["soft", "unique"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "숲을 떠올리게 하는 이름",
+    meaning: "편안하고 자연스러운 힐링의 이미지",
+    story:
+      "곁에 있으면 마음이 안정되는 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "노엘",
+    kinds: ["meaning"],
+    moodTags: ["luxury", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "기쁨과 축복의 의미를 가진 이름",
+    meaning: "선물처럼 찾아온 존재의 이미지",
+    story:
+      "새 가족으로 온 순간 자체가 큰 기쁨이었던 아이에게 특히 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "루나",
+    kinds: ["meaning"],
+    moodTags: ["luxury", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "달의 이미지",
+    meaning: "은은하고 고요하게 빛나는 존재",
+    story:
+      "차분하고 우아한 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "리오",
+    kinds: ["meaning"],
+    moodTags: ["trendy", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "강처럼 힘있게 흐르는 이미지",
+    meaning: "생동감 있고 밝은 에너지",
+    story:
+      "활발하고 표정이 풍부하며 함께 있으면 분위기가 살아나는 아이에게 잘 어울려요.",
+  },
+  {
+    name: "피치",
+    kinds: ["meaning"],
+    moodTags: ["cute", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "복숭아의 상큼하고 사랑스러운 이미지",
+    meaning: "달콤하고 화사한 매력",
+    story:
+      "상큼하고 사랑스러운 분위기의 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "버터",
+    kinds: ["meaning"],
+    moodTags: ["cute", "unique", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["all"],
+    source: "부드럽고 말랑한 이미지를 담은 별명형 이름",
+    meaning: "포근하고 귀여운 무드",
+    story:
+      "둥글둥글하고 애교 많은 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "조이",
+    kinds: ["meaning"],
+    moodTags: ["cute", "trendy"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "기쁨과 즐거움의 의미",
+    meaning: "함께 있으면 기분 좋아지는 이미지",
+    story:
+      "가족에게 웃음을 많이 주는 아이에게 잘 어울리는 밝은 이름이에요.",
+  },
+  {
+    name: "벨",
+    kinds: ["meaning"],
+    moodTags: ["luxury", "soft"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["female", "all"],
+    source: "아름다움을 떠올리게 하는 이름",
+    meaning: "고운 인상과 단정한 분위기",
+    story:
+      "예쁘고 우아한 인상을 가진 아이에게 잘 어울리는 이름이에요.",
+  },
+  {
+    name: "아몬",
+    kinds: ["meaning"],
+    moodTags: ["unique", "luxury"],
+    regionTags: ["global"],
+    petTypes: ["all"],
+    genders: ["male", "all"],
+    source: "신비로운 울림의 이름",
+    meaning: "단단하고 존재감 있는 이미지",
+    story:
+      "묵직한 분위기와 독특한 매력을 함께 가진 아이에게 잘 어울리는 이름이에요.",
+  },
 ];
 
-const globalNames: string[] = [
-  "루나", "레오", "밀로", "로이", "코코", "모카", "로키", "루비", "하비", "베리",
-  "니코", "리오", "토비", "엘리", "노아", "지지", "미유", "유키", "시엘", "리키",
-  "모리", "테오", "마일로", "벨라", "올리", "로미", "레미", "에리", "하니", "루미",
-  "나나", "제리", "토토", "미로", "세라", "로라", "키키", "무이", "리리", "네로",
-  "리노", "로렌", "하임", "코나", "도비", "엘라", "루크", "지노", "모네", "아론",
-  "미카", "엘로", "도나", "세이지", "카이", "리브", "베니", "루카", "노엘", "로사",
-];
+function getTodayKey() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 function hashString(value: string) {
   let hash = 0;
@@ -201,92 +1170,155 @@ function hashString(value: string) {
   return hash;
 }
 
-function uniqueArray<T>(arr: T[]) {
-  return [...new Set(arr)];
-}
+function uniqueCandidatesByName(items: NameCandidate[]) {
+  const seen = new Set<string>();
+  const result: NameCandidate[] = [];
 
-function rotatePick<T>(arr: T[], start: number, count: number) {
-  const result: T[] = [];
-  if (arr.length === 0) return result;
-
-  for (let i = 0; i < arr.length && result.length < count; i += 1) {
-    result.push(arr[(start + i) % arr.length]);
+  for (const item of items) {
+    const key = `${item.name}|${item.source}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(item);
+    }
   }
+
   return result;
 }
 
-function buildHangulNames(style: NameStyle, count = 240) {
-  const startList = uniqueArray(hangulStartMap[style]);
-  const endList = uniqueArray(hangulEndMap[style]);
-  const names: string[] = [];
+function buildRecentHistoryKey(args: {
+  kind: NameKind;
+  style: NameStyle;
+  petType: PetType;
+  gender: PetGender;
+}) {
+  const { kind, style, petType, gender } = args;
+  return `${kind}__${style}__${petType}__${gender}`;
+}
 
-  for (const s of startList) {
-    for (const e of endList) {
-      const name = `${s}${e}`;
-      if (name.length >= 2 && name.length <= 3) {
-        names.push(name);
-      }
+async function getRecentNames(queryKey: string) {
+  try {
+    const raw = await AsyncStorage.getItem(NAME_RECOMMEND_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed[queryKey])) {
+      return parsed[queryKey] as string[];
     }
+    return [];
+  } catch {
+    return [];
   }
-
-  return uniqueArray(names).slice(0, count);
 }
 
-function buildNicknameNames(style: NameStyle, count = 240) {
-  const startList = uniqueArray(nicknameStartMap[style]);
-  const endList = uniqueArray(nicknameEndMap[style]);
-  const names: string[] = [];
-
-  for (const s of startList) {
-    for (const e of endList) {
-      const name = `${s}${e}`;
-      if (name.length >= 2 && name.length <= 3) {
-        names.push(name);
-      }
-    }
+async function saveRecentNames(queryKey: string, names: string[]) {
+  try {
+    const raw = await AsyncStorage.getItem(NAME_RECOMMEND_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const next = parsed && typeof parsed === "object" ? parsed : {};
+    const prevNames = Array.isArray(next[queryKey]) ? next[queryKey] : [];
+    next[queryKey] = [...names, ...prevNames].slice(0, 30);
+    await AsyncStorage.setItem(NAME_RECOMMEND_HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    // noop
   }
-
-  return uniqueArray(names).slice(0, count);
 }
 
-function getNamePool(kind: NameKind, style: NameStyle) {
-  if (kind === "hangul") return buildHangulNames(style, 240);
-  if (kind === "nickname") return buildNicknameNames(style, 240);
-  if (kind === "neutral") return neutralNames;
-  return globalNames;
+function filterByTypeGender(items: NameCandidate[], petType: PetType, gender: PetGender) {
+  return items.filter((item) => {
+    const typeMatch = item.petTypes.includes("all") || item.petTypes.includes(petType);
+    const genderMatch = item.genders.includes("all") || item.genders.includes(gender);
+    return typeMatch && genderMatch;
+  });
 }
 
-function getMeaning(style: NameStyle, seed: number) {
-  const source = meaningMap[style];
-  return source[seed % source.length];
+function filterByRegion(items: NameCandidate[], style: NameStyle) {
+  if (style !== "korean") return items;
+  return items.filter((item) => item.regionTags.includes("korean"));
 }
 
-function getGenderFilteredPool(
-  pool: string[],
-  gender: PetGender,
-  kind: NameKind
-) {
-  if (kind === "neutral") return pool;
-
-  if (gender === "male") {
-    return pool.filter((name) => !name.endsWith("나") && !name.endsWith("미"));
-  }
-
-  return pool.filter((name) => !name.endsWith("호") && !name.endsWith("태"));
+function filterByMood(items: NameCandidate[], style: NameStyle) {
+  if (style === "korean") return items;
+  return items.filter((item) => item.moodTags.includes(style));
 }
 
-function getTypeFilteredPool(pool: string[], petType: PetType, kind: NameKind) {
-  if (kind === "global" || kind === "neutral") return pool;
-  if (petType === "dog") return pool.filter((name) => name.length >= 2);
-  return pool.filter((name) => name.length >= 2);
+function getFilteredCandidates(args: {
+  kind: NameKind;
+  style: NameStyle;
+  petType: PetType;
+  gender: PetGender;
+}) {
+  const { kind, style, petType, gender } = args;
+
+  const sameKind = NAME_CANDIDATES.filter((item) => item.kinds.includes(kind));
+  const sameKindSameRegion = filterByRegion(sameKind, style);
+
+  const tier1 = filterByMood(
+    filterByTypeGender(sameKindSameRegion, petType, gender),
+    style
+  );
+
+  const tier2 = filterByTypeGender(sameKindSameRegion, petType, gender);
+
+  const tier3 = filterByMood(sameKindSameRegion, style);
+
+  const tier4 = sameKindSameRegion;
+
+  // region이 너무 좁아서 결과가 적으면 같은 kind 내에서만 완화
+  const tier5 = filterByMood(filterByTypeGender(sameKind, petType, gender), style);
+  const tier6 = filterByTypeGender(sameKind, petType, gender);
+  const tier7 = filterByMood(sameKind, style);
+  const tier8 = sameKind;
+
+  return uniqueCandidatesByName([
+    ...tier1,
+    ...tier2,
+    ...tier3,
+    ...tier4,
+    ...tier5,
+    ...tier6,
+    ...tier7,
+    ...tier8,
+  ]);
 }
 
-function getTodayKey() {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+async function buildNameRecommendations(args: {
+  kind: NameKind;
+  style: NameStyle;
+  petType: PetType;
+  gender: PetGender;
+  requestCount: number;
+}) {
+  const { kind, style, petType, gender, requestCount } = args;
+
+  const candidates = getFilteredCandidates({ kind, style, petType, gender });
+  const queryKey = buildRecentHistoryKey({ kind, style, petType, gender });
+  const recentNames = await getRecentNames(queryKey);
+
+  const seed = hashString(
+    `${kind}|${style}|${petType}|${gender}|${requestCount}|${getTodayKey()}`
+  );
+
+  const sorted = [...candidates].sort((a, b) => {
+    const aScore = hashString(`${a.name}|${a.source}|${seed}`);
+    const bScore = hashString(`${b.name}|${b.source}|${seed}`);
+    return aScore - bScore;
+  });
+
+  const fresh = sorted.filter((item) => !recentNames.includes(item.name));
+  const source = fresh.length >= 10 ? fresh : sorted;
+
+  const picked = source.slice(0, 10).map((item) => ({
+    name: item.name,
+    source: item.source,
+    meaning: item.meaning,
+    story: item.story,
+    tags: [tagLabelMap[kind], tagLabelMap[style]],
+  }));
+
+  await saveRecentNames(
+    queryKey,
+    picked.map((item) => item.name)
+  );
+
+  return picked;
 }
 
 export default function HomeScreen() {
@@ -299,11 +1331,11 @@ export default function HomeScreen() {
   const [isNameModalVisible, setIsNameModalVisible] = useState(false);
   const [selectedType, setSelectedType] = useState<PetType>("dog");
   const [selectedGender, setSelectedGender] = useState<PetGender>("male");
-  const [selectedKind, setSelectedKind] = useState<NameKind>("hangul");
+  const [selectedKind, setSelectedKind] = useState<NameKind>("animation");
   const [selectedStyle, setSelectedStyle] = useState<NameStyle>("cute");
   const [isNameLoading, setIsNameLoading] = useState(false);
   const [nameRequestCount, setNameRequestCount] = useState(0);
-  const [recommendations, setRecommendations] = useState<GeneratedNameItem[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendedNameItem[]>([]);
 
   const loadSavedData = useCallback(async () => {
     try {
@@ -498,50 +1530,20 @@ export default function HomeScreen() {
     });
   };
 
-  const basePool = useMemo(() => {
-    const rawPool = getNamePool(selectedKind, selectedStyle);
-    const genderFiltered = getGenderFilteredPool(
-      rawPool,
-      selectedGender,
-      selectedKind
-    );
-    const typeFiltered = getTypeFilteredPool(
-      genderFiltered,
-      selectedType,
-      selectedKind
-    );
-
-    return uniqueArray(typeFiltered);
-  }, [selectedKind, selectedStyle, selectedGender, selectedType]);
-
-  const buildRecommendations = () => {
-    const seedBase = hashString(
-      `${selectedType}|${selectedGender}|${selectedKind}|${selectedStyle}|${nameRequestCount}|${getTodayKey()}`
-    );
-
-    const pickedNames = rotatePick(
-      basePool,
-      seedBase % Math.max(basePool.length, 1),
-      40
-    )
-      .sort((a, b) => hashString(`${a}|${seedBase}`) - hashString(`${b}|${seedBase}`))
-      .slice(0, 10);
-
-    const result: GeneratedNameItem[] = pickedNames.map((name, index) => ({
-      name,
-      tags: [tagLabelMap[selectedKind], tagLabelMap[selectedStyle]],
-      meaning: getMeaning(selectedStyle, hashString(`${name}|${index}|${seedBase}`)),
-    }));
-
-    setRecommendations(result);
-    setNameRequestCount((prev) => prev + 1);
-  };
-
   const handleRecommendNames = () => {
     setIsNameLoading(true);
 
-    setTimeout(() => {
-      buildRecommendations();
+    setTimeout(async () => {
+      const next = await buildNameRecommendations({
+        kind: selectedKind,
+        style: selectedStyle,
+        petType: selectedType,
+        gender: selectedGender,
+        requestCount: nameRequestCount,
+      });
+
+      setRecommendations(next);
+      setNameRequestCount((prev) => prev + 1);
       setIsNameLoading(false);
     }, 3000);
   };
@@ -708,9 +1710,9 @@ export default function HomeScreen() {
             </View>
 
             <Text style={styles.nameRecommendDesc}>
-              강아지나 고양이의 분위기와 성별에 맞춰
+              이름 종류와 분위기를 같이 반영해서
               {"\n"}
-              잘 어울리는 이름을 추천해드려요.
+              스토리가 있는 이름을 추천해드려요.
             </Text>
 
             <View style={styles.nameRecommendButtonWrap}>
@@ -737,10 +1739,10 @@ export default function HomeScreen() {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.modalHeader}>
-                <View>
+                <View style={styles.modalTitleBox}>
                   <Text style={styles.modalTitle}>이름 추천 ✨</Text>
                   <Text style={styles.modalSubtitle}>
-                    조건을 고르면 잘 어울리는 이름 10개를 추천해드려요.
+                    종류와 분위기를 함께 반영해서 이름 10개를 추천해드려요.
                   </Text>
                 </View>
 
@@ -883,13 +1885,14 @@ export default function HomeScreen() {
                   <ActivityIndicator size="large" color={COLORS.secondary} />
                   <Text style={styles.loadingTitle}>이름을 찾고 있어요...</Text>
                   <Text style={styles.loadingDesc}>
-                    {selectedKind === "hangul" && "한글 이름의 울림을 정리하는 중..."}
-                    {selectedKind === "nickname" &&
-                      "귀엽고 부르기 쉬운 별명형 이름을 찾는 중..."}
-                    {selectedKind === "neutral" &&
-                      "어디에나 잘 어울리는 중성적 이름을 찾는 중..."}
-                    {selectedKind === "global" &&
-                      "세련된 글로벌 감성 이름을 찾는 중..."}
+                    {selectedKind === "animation" &&
+                      "선택한 분위기에 맞는 애니 · 영화 이름을 고르는 중..."}
+                    {selectedKind === "art" &&
+                      "선택한 분위기에 맞는 명화 · 예술 이름을 고르는 중..."}
+                    {selectedKind === "myth" &&
+                      "선택한 분위기에 맞는 신화 · 전설 이름을 고르는 중..."}
+                    {selectedKind === "meaning" &&
+                      "선택한 분위기에 맞는 의미형 이름을 고르는 중..."}
                   </Text>
                 </View>
               )}
@@ -898,7 +1901,7 @@ export default function HomeScreen() {
                 <View style={styles.recommendListWrap}>
                   <Text style={styles.recommendListTitle}>추천 이름 10개</Text>
                   <Text style={styles.recommendListSub}>
-                    같은 조건이어도 다시 추천받으면 다른 조합이 나와요.
+                    같은 조건이어도 최근 본 이름은 최대한 피해서 보여드려요.
                   </Text>
 
                   {recommendations.map((item, index) => (
@@ -910,7 +1913,9 @@ export default function HomeScreen() {
                         <Text style={styles.nameValue}>{item.name}</Text>
                       </View>
 
-                      <Text style={styles.nameMeaning}>{item.meaning}</Text>
+                      <Text style={styles.nameSource}>{item.source}</Text>
+                      <Text style={styles.nameMeaning}>의미 · {item.meaning}</Text>
+                      <Text style={styles.nameStory}>{item.story}</Text>
 
                       <View style={styles.tagWrap}>
                         {item.tags.map((tag) => (
@@ -1135,6 +2140,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 10,
   },
+  modalTitleBox: {
+    flex: 1,
+  },
   modalTitle: {
     fontSize: 24,
     fontWeight: "800",
@@ -1276,10 +2284,22 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: COLORS.text,
   },
-  nameMeaning: {
+  nameSource: {
     marginTop: 10,
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.secondary,
+  },
+  nameMeaning: {
+    marginTop: 8,
     fontSize: 14,
-    lineHeight: 22,
+    lineHeight: 21,
+    color: COLORS.text,
+  },
+  nameStory: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 21,
     color: COLORS.subText,
   },
   tagWrap: {
