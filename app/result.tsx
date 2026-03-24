@@ -10,7 +10,7 @@ import {
   Share,
   StyleSheet,
   Text,
-  View,
+  View
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
 
@@ -57,6 +57,20 @@ ${summary}
 추천 행동
 ${recommendedAction}`;
 
+  const captureResultImage = async () => {
+    if (!captureViewRef.current) {
+      throw new Error("capture view ref not found");
+    }
+
+    const uri = await captureRef(captureViewRef, {
+      format: "png",
+      quality: 1,
+      result: "tmpfile",
+    });
+
+    return uri;
+  };
+
   const handleTextShare = async () => {
     try {
       await Share.share({ message: shareText });
@@ -67,25 +81,28 @@ ${recommendedAction}`;
 
   const handleSaveImage = async () => {
     try {
-      if (!captureViewRef.current) return;
-
-      const uri = await captureRef(captureViewRef, {
-        format: "png",
-        quality: 1,
-      });
-
       if (Platform.OS === "web") {
         Alert.alert("안내", "웹에서는 이미지 저장 기능이 제한될 수 있어요.");
         return;
       }
 
-      const permission = await MediaLibrary.requestPermissionsAsync();
+      const permission = await MediaLibrary.requestPermissionsAsync(true, ["photo"]);
+
       if (!permission.granted) {
         Alert.alert("권한 필요", "이미지를 저장하려면 사진 권한이 필요해요.");
         return;
       }
 
-      await MediaLibrary.saveToLibraryAsync(uri);
+      const uri = await captureResultImage();
+
+      const asset = await MediaLibrary.createAssetAsync(uri);
+
+      try {
+        await MediaLibrary.createAlbumAsync("Pictures", asset, false);
+      } catch {
+        // 앨범이 이미 있거나 생성 실패해도 asset 자체는 저장됨
+      }
+
       Alert.alert("저장 완료", "운세 이미지를 사진첩에 저장했어요.");
     } catch (error) {
       console.error("이미지 저장 실패", error);
@@ -95,13 +112,6 @@ ${recommendedAction}`;
 
   const handleImageShare = async () => {
     try {
-      if (!captureViewRef.current) return;
-
-      const uri = await captureRef(captureViewRef, {
-        format: "png",
-        quality: 1,
-      });
-
       if (Platform.OS === "web") {
         await handleTextShare();
         return;
@@ -113,6 +123,7 @@ ${recommendedAction}`;
         return;
       }
 
+      const uri = await captureResultImage();
       await Sharing.shareAsync(uri);
     } catch (error) {
       console.error("이미지 공유 실패", error);
