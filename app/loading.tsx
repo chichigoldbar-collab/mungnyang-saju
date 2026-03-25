@@ -1,8 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   StyleSheet,
   Text,
@@ -10,80 +10,48 @@ import {
 } from "react-native";
 
 import { COLORS } from "../constants/colors";
-import type { FortuneHistoryItem, PetGender, PetType } from "../types";
-import { buildFortuneResult } from "../utils/fortune-generator";
+import type { PetGender, PetType } from "../types";
 
-const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
-const DAILY_FORTUNE_CACHE_KEY = "mungnyang-daily-fortune-cache";
-
-type DailyFortuneCacheItem = {
-  petId: string;
-  dateKey: string;
-  petName: string;
-  petType: PetType;
-  petGender: PetGender;
-  isNeutered: boolean;
-  breed: string;
-  birthDate: string;
-  birthTime: string;
-  summary: string;
-  health: string;
-  appetite: string;
-  mood: string;
-  caution: string;
-  luckyColor: string;
-  luckyItem: string;
-  recommendedAction: string;
+type FortuneApiResponse = {
+  success: boolean;
+  data?: {
+    petId: string;
+    dateKey: string;
+    petName: string;
+    petType: PetType;
+    petGender: PetGender;
+    isNeutered: boolean;
+    breed: string;
+    birthDate: string;
+    birthTime: string;
+    summary: string;
+    health: string;
+    appetite: string;
+    mood: string;
+    caution: string;
+    luckyColor: string;
+    luckyItem: string;
+    recommendedAction: string;
+  };
+  message?: string;
 };
 
-function getTodayKey() {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+function getApiBaseUrl() {
+  if (Platform.OS === "android") {
+    return "http://10.0.2.2:4000";
+  }
 
-function calculateAge(birthDate: string) {
-  const onlyNumbers = birthDate.replace(/\D/g, "");
-  if (onlyNumbers.length !== 8) return "나이 미확인";
+  if (Platform.OS === "ios") {
+    return "http://localhost:4000";
+  }
 
-  const year = Number(onlyNumbers.slice(0, 4));
-  const month = Number(onlyNumbers.slice(4, 6));
-  const day = Number(onlyNumbers.slice(6, 8));
-
-  const today = new Date();
-  let age = today.getFullYear() - year;
-
-  const hasNotHadBirthdayYet =
-    today.getMonth() + 1 < month ||
-    (today.getMonth() + 1 === month && today.getDate() < day);
-
-  if (hasNotHadBirthdayYet) age -= 1;
-  if (age < 0) return "나이 미확인";
-
-  return `${age}살`;
-}
-
-async function saveFortuneHistory(item: FortuneHistoryItem) {
-  const saved = await AsyncStorage.getItem(FORTUNE_HISTORY_KEY);
-  const parsed = saved ? JSON.parse(saved) : [];
-  const current = Array.isArray(parsed) ? parsed : [];
-  const updated = [item, ...current].slice(0, 100);
-  await AsyncStorage.setItem(FORTUNE_HISTORY_KEY, JSON.stringify(updated));
-}
-
-async function saveDailyFortuneCache(item: DailyFortuneCacheItem) {
-  const saved = await AsyncStorage.getItem(DAILY_FORTUNE_CACHE_KEY);
-  const parsed = saved ? JSON.parse(saved) : {};
-  const current = parsed && typeof parsed === "object" ? parsed : {};
-  current[item.petId] = item;
-  await AsyncStorage.setItem(DAILY_FORTUNE_CACHE_KEY, JSON.stringify(current));
+  return "http://localhost:4000";
 }
 
 export default function LoadingScreen() {
   const params = useLocalSearchParams();
-  const lastRequestKeyRef = useRef<string | null>(null);
+  const didRunRef = useRef(false);
+  const [loadingTextIndex, setLoadingTextIndex] = useState(0);
 
   const petId = String(params.petId ?? "");
   const petName = String(params.petName ?? "코코");
@@ -91,63 +59,36 @@ export default function LoadingScreen() {
   const petGender = String(params.petGender ?? "male") as PetGender;
   const isNeutered = String(params.isNeutered ?? "false") === "true";
   const breed = String(params.breed ?? "품종 미입력");
-  const birthDate = String(params.birthDate ?? "생일 미입력");
+  const birthDate = String(params.birthDate ?? "2024-01-01");
   const birthTime = String(params.birthTime ?? "시간 모름");
 
-  const requestKey = `${petId}|${petName}|${petType}|${petGender}|${isNeutered}|${breed}|${birthDate}|${birthTime}`;
-
-  const fortune = useMemo(async () => {
-    const savedHistory = await AsyncStorage.getItem(FORTUNE_HISTORY_KEY);
-    const parsedHistory = savedHistory ? JSON.parse(savedHistory) : [];
-    const history = Array.isArray(parsedHistory) ? parsedHistory : [];
-
-    return buildFortuneResult({
-      petId,
-      petName,
-      petType,
-      petGender,
-      isNeutered,
-      history,
-    });
-  }, [petId, petName, petType, petGender, isNeutered]);
+  const loadingMessages = useMemo(
+    () => [
+      `${petName}의 오늘 운세를 읽는 중이에요...`,
+      "기분운과 식욕운을 분석하고 있어요...",
+      "행운 컬러와 아이템을 찾고 있어요...",
+      "결과를 예쁘게 정리하고 있어요...",
+    ],
+    [petName]
+  );
 
   useEffect(() => {
-    if (lastRequestKeyRef.current === requestKey) return;
-    lastRequestKeyRef.current = requestKey;
+    const timer = setInterval(() => {
+      setLoadingTextIndex((prev) => (prev + 1) % loadingMessages.length);
+    }, 1200);
 
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let isActive = true;
+    return () => clearInterval(timer);
+  }, [loadingMessages.length]);
 
-    const run = async () => {
+  useEffect(() => {
+    if (didRunRef.current) return;
+    didRunRef.current = true;
+
+    const fetchDailyFortune = async () => {
       try {
-        const resolvedFortune = await fortune;
-
-        const historyItem: FortuneHistoryItem = {
-          id: `${Date.now()}-${petId}`,
+        const url = `${getApiBaseUrl()}/api/fortune/daily`;
+        const payload = {
           petId,
-          createdAt: new Date().toISOString(),
-          petName,
-          petType,
-          petGender,
-          breed,
-          age: calculateAge(birthDate),
-          summary: resolvedFortune.summary,
-          health: resolvedFortune.health,
-          appetite: resolvedFortune.appetite,
-          mood: resolvedFortune.mood,
-          caution: resolvedFortune.caution,
-          luckyColor: resolvedFortune.luckyColor,
-          luckyItem: resolvedFortune.luckyItem,
-          recommendedAction: resolvedFortune.recommendedAction,
-          personalityKey: resolvedFortune.personalityKey,
-          moodKey: resolvedFortune.moodKey,
-          focusKey: resolvedFortune.focusKey,
-          cautionKey: resolvedFortune.cautionKey,
-        };
-
-        const dailyItem: DailyFortuneCacheItem = {
-          petId,
-          dateKey: getTodayKey(),
           petName,
           petType,
           petGender,
@@ -155,59 +96,69 @@ export default function LoadingScreen() {
           breed,
           birthDate,
           birthTime,
-          summary: resolvedFortune.summary,
-          health: resolvedFortune.health,
-          appetite: resolvedFortune.appetite,
-          mood: resolvedFortune.mood,
-          caution: resolvedFortune.caution,
-          luckyColor: resolvedFortune.luckyColor,
-          luckyItem: resolvedFortune.luckyItem,
-          recommendedAction: resolvedFortune.recommendedAction,
         };
 
-        await Promise.all([
-          saveFortuneHistory(historyItem),
-          saveDailyFortuneCache(dailyItem),
-        ]);
+        console.log("API URL:", url);
+        console.log("API PAYLOAD:", payload);
 
-        if (!isActive) return;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
 
-        timer = setTimeout(() => {
-          router.replace({
-            pathname: "/(tabs)/result",
-            params: {
-              petId,
-              petName,
-              petType,
-              petGender,
-              isNeutered: isNeutered ? "true" : "false",
-              breed,
-              birthDate,
-              birthTime,
-              summary: resolvedFortune.summary,
-              health: resolvedFortune.health,
-              appetite: resolvedFortune.appetite,
-              mood: resolvedFortune.mood,
-              caution: resolvedFortune.caution,
-              luckyColor: resolvedFortune.luckyColor,
-              luckyItem: resolvedFortune.luckyItem,
-              recommendedAction: resolvedFortune.recommendedAction,
-            },
-          });
-        }, 2200);
+        console.log("API STATUS:", response.status);
+
+        const json = (await response.json()) as FortuneApiResponse;
+        console.log("API RESPONSE JSON:", json);
+
+        if (!response.ok || !json.success || !json.data) {
+          throw new Error(json.message ?? "운세를 불러오지 못했어요.");
+        }
+
+        console.log("ROUTER REPLACE START");
+
+        router.replace({
+          pathname: "/result",
+          params: {
+            petId: json.data.petId,
+            petName: json.data.petName,
+            petType: json.data.petType,
+            petGender: json.data.petGender,
+            isNeutered: json.data.isNeutered ? "true" : "false",
+            breed: json.data.breed,
+            birthDate: json.data.birthDate,
+            birthTime: json.data.birthTime,
+            summary: json.data.summary,
+            health: json.data.health,
+            appetite: json.data.appetite,
+            mood: json.data.mood,
+            caution: json.data.caution,
+            luckyColor: json.data.luckyColor,
+            luckyItem: json.data.luckyItem,
+            recommendedAction: json.data.recommendedAction,
+          },
+        });
       } catch (error) {
-        console.error("로딩 중 저장 실패", error);
+        console.error("운세 API 호출 실패", error);
+
+        Alert.alert(
+          "운세 불러오기 실패",
+          "서버와 연결하지 못했어요. 서버가 실행 중인지 확인해주세요.",
+          [
+            {
+              text: "확인",
+              onPress: () => router.back(),
+            },
+          ]
+        );
       }
     };
 
-    run();
-
-    return () => {
-      isActive = false;
-      if (timer) clearTimeout(timer);
-    };
+    fetchDailyFortune();
   }, [
-    requestKey,
     petId,
     petName,
     petType,
@@ -216,83 +167,43 @@ export default function LoadingScreen() {
     breed,
     birthDate,
     birthTime,
-    fortune,
   ]);
 
-  let LottieView: any = null;
-  if (Platform.OS !== "web") {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      LottieView = require("lottie-react-native").default;
-    } catch {
-      LottieView = null;
-    }
-  }
-
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
       <View style={styles.card}>
-        <Text style={styles.petIcon}>{petType === "cat" ? "🐱" : "🐶"}</Text>
-
-        {LottieView ? (
-          <LottieView
-            source={require("../assets/lottie/fortune-loading.json")}
-            autoPlay
-            loop
-            style={styles.lottie}
-          />
-        ) : (
-          <View style={styles.spinnerWrap}>
-            <ActivityIndicator size="large" color={COLORS.secondary} />
-          </View>
-        )}
-
-        <Text style={styles.title}>우리 아이 운세 분석 중...</Text>
-        <Text style={styles.desc}>
-          {petName}의 오늘 기분과 흐름을 천천히 읽고 있어요
-        </Text>
+        <Text style={styles.emoji}>{petType === "cat" ? "🐱" : "🐶"}</Text>
+        <ActivityIndicator size="large" color={COLORS.secondary} />
+        <Text style={styles.title}>오늘의 운세를 분석하고 있어요</Text>
+        <Text style={styles.desc}>{loadingMessages[loadingTextIndex]}</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: COLORS.bg,
-    justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    justifyContent: "center",
+    padding: 20,
   },
   card: {
     width: "100%",
-    maxWidth: 340,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 28,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    padding: 28,
     alignItems: "center",
   },
-  petIcon: {
-    fontSize: 30,
-    marginBottom: 8,
-  },
-  lottie: {
-    width: 160,
-    height: 160,
-    marginBottom: 8,
-  },
-  spinnerWrap: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
+  emoji: {
+    fontSize: 42,
+    marginBottom: 14,
   },
   title: {
+    marginTop: 18,
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "900",
     color: COLORS.text,
     textAlign: "center",
   },
