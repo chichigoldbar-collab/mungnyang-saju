@@ -1,0 +1,93 @@
+[
+  {
+    "id": "nature_noeul_001",
+    "name": "노을",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "해질녘의 따뜻한 이미지",
+    "meaning": "은은하고 감성적인 빛",
+    "story": "보고 있으면 마음이 풀리는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "nature_haedal_001",
+    "name": "해달",
+    "kinds": ["meaning"],
+    "moodTags": ["cute", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "햇빛과 달빛을 함께 떠올리게 하는 이름",
+    "meaning": "포근하고 특별한 이미지",
+    "story": "둥글고 귀여운 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 6,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "nature_lumi_001",
+    "name": "루미",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "빛을 떠올리게 하는 이름",
+    "meaning": "은은하게 빛나는 존재감",
+    "story": "조용히 존재감을 남기는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "nature_rio_001",
+    "name": "리오",
+    "kinds": ["meaning"],
+    "moodTags": ["trendy", "soft"],
+    "petTypes": ["all"],
+    "genders": ["male", "all"],
+    "source": "강처럼 힘있게 흐르는 이미지",
+    "meaning": "생동감 있고 밝은 에너지",
+    "story": "표정이 풍부하고 활발한 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "nature_bom_001",
+    "name": "봄",
+    "kinds": ["meaning"],
+    "moodTags": ["cute", "soft"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "계절의 이미지",
+    "meaning": "화사하고 따뜻한 시작",
+    "story": "상큼하고 사랑스러운 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "nature_gureum_001",
+    "name": "구름",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "하늘의 이미지",
+    "meaning": "둥글고 편안한 느낌",
+    "story": "포근하고 둥글둥글한 매력의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "nature_stella_001",
+    "name": "스텔라",
+    "kinds": ["meaning"],
+    "moodTags": ["luxury", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "별의 이미지",
+    "meaning": "빛나고 세련된 존재감",
+    "story": "고급스럽고 눈에 띄는 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["global"]
+  }
+]

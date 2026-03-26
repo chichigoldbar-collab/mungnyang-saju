@@ -1,0 +1,28 @@
+[
+  {
+    "id": "literature_momo_001",
+    "name": "모모",
+    "kinds": ["animation", "meaning"],
+    "moodTags": ["cute", "soft"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "소설 《모모》",
+    "meaning": "다정하고 조용한 위로의 이미지",
+    "story": "차분하고 곁에 있으면 마음이 놓이는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "literature_noel_001",
+    "name": "노엘",
+    "kinds": ["meaning", "animation"],
+    "moodTags": ["luxury", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "문학적이고 축복의 울림을 가진 이름",
+    "meaning": "기쁨과 선물의 이미지",
+    "story": "새 가족으로 온 순간 자체가 큰 기쁨인 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["global"]
+  }
+]

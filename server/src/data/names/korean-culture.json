@@ -1,0 +1,28 @@
+[
+  {
+    "id": "kculture_bari_001",
+    "name": "바리",
+    "kinds": ["myth", "meaning"],
+    "moodTags": ["soft", "unique"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "한국 신화 바리데기",
+    "meaning": "강한 운명과 회복의 상징",
+    "story": "조용하지만 단단한 내면을 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "kculture_garam_001",
+    "name": "가람",
+    "kinds": ["meaning", "myth"],
+    "moodTags": ["soft", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "한국적 자연 감성",
+    "meaning": "강처럼 흐르는 생명감",
+    "story": "자유롭고 흐름이 좋은 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  }
+]

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "meaning_raon_001",
+    "name": "라온",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "cute"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "순우리말",
+    "meaning": "즐거운, 기쁜",
+    "story": "가족에게 웃음과 밝은 에너지를 주는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 10,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "meaning_daon_001",
+    "name": "다온",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "좋은 것이 다 온다는 뜻",
+    "meaning": "좋은 기운이 가득 오는 이미지",
+    "story": "새 가족이 된 뒤 집안 분위기를 환하게 바꾸는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 10,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "meaning_luna_001",
+    "name": "루나",
+    "kinds": ["meaning"],
+    "moodTags": ["luxury", "soft"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "달의 이미지",
+    "meaning": "은은하게 빛나는 존재",
+    "story": "차분하고 우아한 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 9,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "meaning_nova_001",
+    "name": "노바",
+    "kinds": ["meaning"],
+    "moodTags": ["trendy", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "새로운 별, 새로운 시작",
+    "meaning": "새로운 출발과 설렘",
+    "story": "새 가족이 된 순간을 특별하게 기억하고 싶은 경우 잘 어울리는 이름이에요.",
+    "weight": 9,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "meaning_byeol_001",
+    "name": "별",
+    "kinds": ["meaning"],
+    "moodTags": ["cute", "soft"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "반짝이는 존재를 비유한 이름",
+    "meaning": "가족의 시선을 사로잡는 소중한 별",
+    "story": "예쁘고 사랑스럽고 눈에 띄는 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  }
+]

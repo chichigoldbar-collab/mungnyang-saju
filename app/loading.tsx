@@ -1,5 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +12,9 @@ import {
 
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
+
+const DAILY_FORTUNE_CACHE_KEY = "mungnyang-daily-fortune-cache";
+const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
 
 type FortuneApiResponse = {
   success: boolean;
@@ -36,6 +40,26 @@ type FortuneApiResponse = {
   message?: string;
 };
 
+type DailyFortuneCacheItem = {
+  petId: string;
+  dateKey: string;
+  petName: string;
+  petType: PetType;
+  petGender: PetGender;
+  isNeutered: boolean;
+  breed: string;
+  birthDate: string;
+  birthTime: string;
+  summary: string;
+  health: string;
+  appetite: string;
+  mood: string;
+  caution: string;
+  luckyColor: string;
+  luckyItem: string;
+  recommendedAction: string;
+};
+
 function getApiBaseUrl() {
   if (Platform.OS === "android") {
     return "http://10.0.2.2:4000";
@@ -48,9 +72,51 @@ function getApiBaseUrl() {
   return "http://localhost:4000";
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function saveDailyFortuneResult(item: DailyFortuneCacheItem) {
+  try {
+    const [dailyCacheRaw, historyRaw] = await Promise.all([
+      AsyncStorage.getItem(DAILY_FORTUNE_CACHE_KEY),
+      AsyncStorage.getItem(FORTUNE_HISTORY_KEY),
+    ]);
+
+    const parsedDailyCache = dailyCacheRaw ? JSON.parse(dailyCacheRaw) : {};
+    const nextDailyCache =
+      parsedDailyCache && typeof parsedDailyCache === "object"
+        ? parsedDailyCache
+        : {};
+
+    nextDailyCache[item.petId] = item;
+
+    const parsedHistory = historyRaw ? JSON.parse(historyRaw) : [];
+    const nextHistory = Array.isArray(parsedHistory) ? parsedHistory : [];
+
+    const alreadyExists = nextHistory.some(
+      (historyItem: DailyFortuneCacheItem) =>
+        historyItem.petId === item.petId && historyItem.dateKey === item.dateKey
+    );
+
+    if (!alreadyExists) {
+      nextHistory.unshift(item);
+    }
+
+    await Promise.all([
+      AsyncStorage.setItem(
+        DAILY_FORTUNE_CACHE_KEY,
+        JSON.stringify(nextDailyCache)
+      ),
+      AsyncStorage.setItem(FORTUNE_HISTORY_KEY, JSON.stringify(nextHistory)),
+    ]);
+  } catch (error) {
+    console.error("오늘 운세 저장 실패", error);
+  }
+}
+
 export default function LoadingScreen() {
   const params = useLocalSearchParams();
-  const didRunRef = useRef(false);
   const [loadingTextIndex, setLoadingTextIndex] = useState(0);
 
   const petId = String(params.petId ?? "");
@@ -81,68 +147,97 @@ export default function LoadingScreen() {
   }, [loadingMessages.length]);
 
   useEffect(() => {
-    if (didRunRef.current) return;
-    didRunRef.current = true;
+    if (!petId) {
+      Alert.alert("오류", "반려동물 정보가 없어요.", [
+        {
+          text: "확인",
+          onPress: () => router.back(),
+        },
+      ]);
+      return;
+    }
+
+    let isCancelled = false;
 
     const fetchDailyFortune = async () => {
       try {
-        const url = `${getApiBaseUrl()}/api/fortune/daily`;
-        const payload = {
-          petId,
-          petName,
-          petType,
-          petGender,
-          isNeutered,
-          breed,
-          birthDate,
-          birthTime,
-        };
-
-        console.log("API URL:", url);
-        console.log("API PAYLOAD:", payload);
-
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        console.log("API STATUS:", response.status);
+        const [response] = await Promise.all([
+          fetch(`${getApiBaseUrl()}/api/fortune/daily`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              petId,
+              petName,
+              petType,
+              petGender,
+              isNeutered,
+              breed,
+              birthDate,
+              birthTime,
+            }),
+          }),
+          wait(2300),
+        ]);
 
         const json = (await response.json()) as FortuneApiResponse;
-        console.log("API RESPONSE JSON:", json);
 
         if (!response.ok || !json.success || !json.data) {
           throw new Error(json.message ?? "운세를 불러오지 못했어요.");
         }
 
-        console.log("ROUTER REPLACE START");
+        if (isCancelled) return;
+
+        const resultItem: DailyFortuneCacheItem = {
+          petId: json.data.petId,
+          dateKey: json.data.dateKey,
+          petName: json.data.petName,
+          petType: json.data.petType,
+          petGender: json.data.petGender,
+          isNeutered: json.data.isNeutered,
+          breed: json.data.breed,
+          birthDate: json.data.birthDate,
+          birthTime: json.data.birthTime,
+          summary: json.data.summary,
+          health: json.data.health,
+          appetite: json.data.appetite,
+          mood: json.data.mood,
+          caution: json.data.caution,
+          luckyColor: json.data.luckyColor,
+          luckyItem: json.data.luckyItem,
+          recommendedAction: json.data.recommendedAction,
+        };
+
+        await saveDailyFortuneResult(resultItem);
+
+        if (isCancelled) return;
 
         router.replace({
           pathname: "/result",
           params: {
-            petId: json.data.petId,
-            petName: json.data.petName,
-            petType: json.data.petType,
-            petGender: json.data.petGender,
-            isNeutered: json.data.isNeutered ? "true" : "false",
-            breed: json.data.breed,
-            birthDate: json.data.birthDate,
-            birthTime: json.data.birthTime,
-            summary: json.data.summary,
-            health: json.data.health,
-            appetite: json.data.appetite,
-            mood: json.data.mood,
-            caution: json.data.caution,
-            luckyColor: json.data.luckyColor,
-            luckyItem: json.data.luckyItem,
-            recommendedAction: json.data.recommendedAction,
+            petId: resultItem.petId,
+            petName: resultItem.petName,
+            petType: resultItem.petType,
+            petGender: resultItem.petGender,
+            isNeutered: resultItem.isNeutered ? "true" : "false",
+            breed: resultItem.breed,
+            birthDate: resultItem.birthDate,
+            birthTime: resultItem.birthTime,
+            summary: resultItem.summary,
+            health: resultItem.health,
+            appetite: resultItem.appetite,
+            mood: resultItem.mood,
+            caution: resultItem.caution,
+            luckyColor: resultItem.luckyColor,
+            luckyItem: resultItem.luckyItem,
+            recommendedAction: resultItem.recommendedAction,
           },
         });
       } catch (error) {
         console.error("운세 API 호출 실패", error);
+
+        if (isCancelled) return;
 
         Alert.alert(
           "운세 불러오기 실패",
@@ -158,16 +253,11 @@ export default function LoadingScreen() {
     };
 
     fetchDailyFortune();
-  }, [
-    petId,
-    petName,
-    petType,
-    petGender,
-    isNeutered,
-    breed,
-    birthDate,
-    birthTime,
-  ]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [petId, petName, petType, petGender, isNeutered, breed, birthDate, birthTime]);
 
   return (
     <View style={styles.screen}>

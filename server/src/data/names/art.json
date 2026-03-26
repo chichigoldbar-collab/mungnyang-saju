@@ -1,0 +1,67 @@
+[
+  {
+    "id": "art_monet_001",
+    "name": "모네",
+    "kinds": ["art"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "화가 클로드 모네",
+    "meaning": "빛과 색을 부드럽게 담는 이미지",
+    "story": "잔잔하고 감성적인 분위기를 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 10,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "art_gogh_001",
+    "name": "고흐",
+    "kinds": ["art"],
+    "moodTags": ["unique", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["male", "all"],
+    "source": "화가 빈센트 반 고흐",
+    "meaning": "강한 개성과 감성의 이미지",
+    "story": "존재감이 뚜렷하고 눈빛이 인상적인 아이에게 잘 어울리는 이름이에요.",
+    "weight": 9,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "art_klimt_001",
+    "name": "클림트",
+    "kinds": ["art"],
+    "moodTags": ["luxury", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "화가 구스타프 클림트",
+    "meaning": "화려하고 장식적인 우아함",
+    "story": "고급스럽고 시선을 끄는 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 9,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "art_hyewon_001",
+    "name": "혜원",
+    "kinds": ["art"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "조선 화가 신윤복의 호",
+    "meaning": "섬세하고 우아한 미감",
+    "story": "부드럽고 예쁜 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 9,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "art_danwon_001",
+    "name": "단원",
+    "kinds": ["art"],
+    "moodTags": ["trendy", "unique"],
+    "petTypes": ["all"],
+    "genders": ["male", "all"],
+    "source": "조선 화가 김홍도의 호",
+    "meaning": "생동감 있고 한국적인 예술 감성",
+    "story": "표정이 풍부하고 생기 있는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  }
+]

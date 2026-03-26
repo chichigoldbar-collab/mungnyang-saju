@@ -1,5 +1,7 @@
 import express from "express";
+import analysisRoutes from "./routes/analysis.routes";
 import fortuneRouter from "./routes/fortune.routes";
+import namesRoutes from "./routes/names.routes";
 
 const app = express();
 const port = 4000;
@@ -16,6 +18,8 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/fortune", fortuneRouter);
+app.use("/api/analysis", analysisRoutes);
+app.use("/api/names", namesRoutes);
 
 app.listen(port, () => {
   console.log(`API server listening on http://localhost:${port}`);

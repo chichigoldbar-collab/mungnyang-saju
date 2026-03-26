@@ -1,0 +1,80 @@
+[
+  {
+    "id": "kculture_yeonhwa_001",
+    "name": "연화",
+    "kinds": ["myth", "meaning"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "한국 설화적 정서에서 착안",
+    "meaning": "맑고 우아한 꽃의 이미지",
+    "story": "부드럽고 깨끗한 인상의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "kculture_jacheong_001",
+    "name": "자청",
+    "kinds": ["myth", "meaning"],
+    "moodTags": ["luxury", "unique"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "제주 신화 자청비",
+    "meaning": "풍요와 생명의 이미지",
+    "story": "우아하면서도 생기 있는 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "kculture_maru_001",
+    "name": "마루",
+    "kinds": ["meaning"],
+    "moodTags": ["trendy", "soft"],
+    "petTypes": ["all"],
+    "genders": ["male", "all"],
+    "source": "하늘, 꼭대기의 의미",
+    "meaning": "맑고 시원한 인상",
+    "story": "반듯하고 밝은 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "kculture_hangyeol_001",
+    "name": "한결",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "한결같은 마음의 의미",
+    "meaning": "변함없고 안정적인 이미지",
+    "story": "꾸준히 위로를 주는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "kculture_haesol_001",
+    "name": "해솔",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "햇살과 자연의 이미지",
+    "meaning": "밝고 편안한 분위기",
+    "story": "보면 기분이 좋아지는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "kculture_seol_001",
+    "name": "설",
+    "kinds": ["meaning"],
+    "moodTags": ["luxury", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "겨울과 맑음의 이미지",
+    "meaning": "깨끗하고 또렷한 존재감",
+    "story": "맑고 차분한 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 6,
+    "regionTags": ["korean"]
+  }
+]

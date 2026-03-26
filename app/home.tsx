@@ -16,14 +16,12 @@ import {
 import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
-import rawNameCandidates from "../data/nameCandidates.json";
 import type { PetGender, PetType } from "../types";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
 const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
 const DAILY_FORTUNE_CACHE_KEY = "mungnyang-daily-fortune-cache";
-const NAME_RECOMMEND_HISTORY_KEY = "mungnyang-name-recommend-history";
 
 type SavedPetProfile = {
   id: string;
@@ -57,21 +55,14 @@ type DailyFortuneCacheItem = {
   recommendedAction: string;
 };
 
-type NameStyle = "cute" | "soft" | "luxury" | "trendy" | "unique";
-type NameKind = "animation" | "art" | "myth" | "meaning";
-type RegionTag = "korean" | "global";
+type NameStyle =
+  | "cute"
+  | "soft"
+  | "luxury"
+  | "trendy"
+  | "unique";
 
-type NameCandidate = {
-  name: string;
-  kinds: NameKind[];
-  moodTags: NameStyle[];
-  regionTags: RegionTag[];
-  petTypes: Array<PetType | "all">;
-  genders: Array<PetGender | "all">;
-  source: string;
-  meaning: string;
-  story: string;
-};
+type NameKind = "animation" | "art" | "myth" | "meaning";
 
 type RecommendedNameItem = {
   name: string;
@@ -79,6 +70,12 @@ type RecommendedNameItem = {
   meaning: string;
   story: string;
   tags: string[];
+};
+
+type NameRecommendApiResponse = {
+  success: boolean;
+  data?: RecommendedNameItem[];
+  message?: string;
 };
 
 const STYLE_OPTIONS: Array<{ key: NameStyle; label: string }> = [
@@ -96,20 +93,6 @@ const KIND_OPTIONS: Array<{ key: NameKind; label: string }> = [
   { key: "meaning", label: "좋은 의미" },
 ];
 
-const tagLabelMap: Record<NameStyle | NameKind, string> = {
-  cute: "귀여운",
-  soft: "부드러운",
-  luxury: "고급스러운",
-  trendy: "트렌디한",
-  unique: "유니크한",
-  animation: "애니 · 영화",
-  art: "명화 · 예술",
-  myth: "신화 · 전설",
-  meaning: "좋은 의미",
-};
-
-const NAME_CANDIDATES = rawNameCandidates as NameCandidate[];
-
 function getTodayKey() {
   const now = new Date();
   const yyyy = now.getFullYear();
@@ -118,158 +101,22 @@ function getTodayKey() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function hashString(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
+function getApiBaseUrl() {
 
-function uniqueCandidatesByName(items: NameCandidate[]) {
-  const seen = new Set<string>();
-  const result: NameCandidate[] = [];
 
-  for (const item of items) {
-    const key = `${item.name}|${item.source}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      result.push(item);
-    }
+  if (Platform.OS === "android") {
+    return "http://10.0.2.2:4000";
   }
 
-  return result;
-}
-
-function buildRecentHistoryKey(args: {
-  kind: NameKind;
-  style: NameStyle;
-  petType: PetType;
-  gender: PetGender;
-}) {
-  const { kind, style, petType, gender } = args;
-  return `${kind}__${style}__${petType}__${gender}`;
-}
-
-async function getRecentNames(queryKey: string) {
-  try {
-    const raw = await AsyncStorage.getItem(NAME_RECOMMEND_HISTORY_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    if (parsed && typeof parsed === "object" && Array.isArray(parsed[queryKey])) {
-      return parsed[queryKey] as string[];
-    }
-    return [];
-  } catch {
-    return [];
+  if (Platform.OS === "ios") {
+    return "http://localhost:4000";
   }
+
+  return "http://localhost:4000";
 }
 
-async function saveRecentNames(queryKey: string, names: string[]) {
-  try {
-    const raw = await AsyncStorage.getItem(NAME_RECOMMEND_HISTORY_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    const next = parsed && typeof parsed === "object" ? parsed : {};
-    const prevNames = Array.isArray(next[queryKey]) ? next[queryKey] : [];
-    next[queryKey] = [...names, ...prevNames].slice(0, 30);
-    await AsyncStorage.setItem(NAME_RECOMMEND_HISTORY_KEY, JSON.stringify(next));
-  } catch {
-    // noop
-  }
-}
-
-function filterByTypeGender(items: NameCandidate[], petType: PetType, gender: PetGender) {
-  return items.filter((item) => {
-    const typeMatch = item.petTypes.includes("all") || item.petTypes.includes(petType);
-    const genderMatch = item.genders.includes("all") || item.genders.includes(gender);
-    return typeMatch && genderMatch;
-  });
-}
-
-function filterByRegion(items: NameCandidate[], style: NameStyle) {
-  return items;
-}
-
-function filterByMood(items: NameCandidate[], style: NameStyle) {
-  return items.filter((item) => item.moodTags.includes(style));
-}
-
-function getFilteredCandidates(args: {
-  kind: NameKind;
-  style: NameStyle;
-  petType: PetType;
-  gender: PetGender;
-}) {
-  const { kind, style, petType, gender } = args;
-
-  const sameKind = NAME_CANDIDATES.filter((item) => item.kinds.includes(kind));
-  const sameKindSameRegion = filterByRegion(sameKind, style);
-
-  const tier1 = filterByMood(
-    filterByTypeGender(sameKindSameRegion, petType, gender),
-    style
-  );
-
-  const tier2 = filterByTypeGender(sameKindSameRegion, petType, gender);
-  const tier3 = filterByMood(sameKindSameRegion, style);
-  const tier4 = sameKindSameRegion;
-
-  const tier5 = filterByMood(filterByTypeGender(sameKind, petType, gender), style);
-  const tier6 = filterByTypeGender(sameKind, petType, gender);
-  const tier7 = filterByMood(sameKind, style);
-  const tier8 = sameKind;
-
-  return uniqueCandidatesByName([
-    ...tier1,
-    ...tier2,
-    ...tier3,
-    ...tier4,
-    ...tier5,
-    ...tier6,
-    ...tier7,
-    ...tier8,
-  ]);
-}
-
-async function buildNameRecommendations(args: {
-  kind: NameKind;
-  style: NameStyle;
-  petType: PetType;
-  gender: PetGender;
-  requestCount: number;
-}) {
-  const { kind, style, petType, gender, requestCount } = args;
-
-  const candidates = getFilteredCandidates({ kind, style, petType, gender });
-  const queryKey = buildRecentHistoryKey({ kind, style, petType, gender });
-  const recentNames = await getRecentNames(queryKey);
-
-  const seed = hashString(
-    `${kind}|${style}|${petType}|${gender}|${requestCount}|${getTodayKey()}`
-  );
-
-  const sorted = [...candidates].sort((a, b) => {
-    const aScore = hashString(`${a.name}|${a.source}|${seed}`);
-    const bScore = hashString(`${b.name}|${b.source}|${seed}`);
-    return aScore - bScore;
-  });
-
-  const fresh = sorted.filter((item) => !recentNames.includes(item.name));
-  const source = fresh.length >= 10 ? fresh : sorted;
-
-  const picked = source.slice(0, 10).map((item) => ({
-    name: item.name,
-    source: item.source,
-    meaning: item.meaning,
-    story: item.story,
-    tags: [tagLabelMap[kind], tagLabelMap[style]],
-  }));
-
-  await saveRecentNames(
-    queryKey,
-    picked.map((item) => item.name)
-  );
-
-  return picked;
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export default function HomeScreen() {
@@ -285,7 +132,6 @@ export default function HomeScreen() {
   const [selectedKind, setSelectedKind] = useState<NameKind>("animation");
   const [selectedStyle, setSelectedStyle] = useState<NameStyle>("cute");
   const [isNameLoading, setIsNameLoading] = useState(false);
-  const [nameRequestCount, setNameRequestCount] = useState(0);
   const [recommendations, setRecommendations] = useState<RecommendedNameItem[]>([]);
 
   const loadSavedData = useCallback(async () => {
@@ -481,22 +327,41 @@ export default function HomeScreen() {
     });
   };
 
-  const handleRecommendNames = () => {
-    setIsNameLoading(true);
-
-    setTimeout(async () => {
-      const next = await buildNameRecommendations({
-        kind: selectedKind,
-        style: selectedStyle,
-        petType: selectedType,
-        gender: selectedGender,
-        requestCount: nameRequestCount,
-      });
-
-      setRecommendations(next);
-      setNameRequestCount((prev) => prev + 1);
+  const handleRecommendNames = async () => {
+    try {
+      setIsNameLoading(true);
+      setRecommendations([]);
+  
+      const [response] = await Promise.all([
+        fetch(`${getApiBaseUrl()}/api/names/recommend`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            petType: selectedType,
+            gender: selectedGender,
+            kind: selectedKind,
+            style: selectedStyle,
+            limit: 10,
+          }),
+        }),
+        wait(2300),
+      ]);
+  
+      const json = await response.json();
+  
+      if (!response.ok || !json.success || !json.data) {
+        throw new Error(json.message ?? "이름 추천 실패");
+      }
+  
+      setRecommendations(json.data);
+    } catch (error) {
+      console.error(error);
+      alert("이름 추천 실패");
+    } finally {
       setIsNameLoading(false);
-    }, 3000);
+    }
   };
 
   const openNameModal = () => {

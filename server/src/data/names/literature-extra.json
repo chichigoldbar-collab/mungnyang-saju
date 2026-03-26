@@ -1,0 +1,67 @@
+[
+  {
+    "id": "literature_lulu_001",
+    "name": "루루",
+    "kinds": ["animation", "meaning"],
+    "moodTags": ["cute", "soft"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "동화적 울림이 있는 이름",
+    "meaning": "가볍고 사랑스러운 이미지",
+    "story": "통통 튀고 귀여운 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "literature_sora_001",
+    "name": "소라",
+    "kinds": ["meaning", "animation"],
+    "moodTags": ["soft", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "맑고 시원한 울림의 이름",
+    "meaning": "깨끗하고 바람 같은 이미지",
+    "story": "차분하지만 생기 있는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "literature_arin_001",
+    "name": "아린",
+    "kinds": ["meaning", "literature"],
+    "moodTags": ["soft", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "문학적인 감성의 이름",
+    "meaning": "맑고 부드러운 울림",
+    "story": "은은하고 감성적인 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 6,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "literature_lina_001",
+    "name": "리나",
+    "kinds": ["animation", "meaning"],
+    "moodTags": ["cute", "luxury"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "동화적이고 부드러운 울림의 이름",
+    "meaning": "밝고 고운 이미지",
+    "story": "사랑스럽고 반짝이는 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "literature_yuri_001",
+    "name": "유리",
+    "kinds": ["meaning", "animation"],
+    "moodTags": ["soft", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "투명하고 맑은 울림의 이름",
+    "meaning": "깨끗하고 섬세한 이미지",
+    "story": "은은하고 여린 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 6,
+    "regionTags": ["korean"]
+  }
+]

@@ -1,0 +1,41 @@
+[
+  {
+    "id": "nature_yunsul_001",
+    "name": "윤슬",
+    "kinds": ["meaning"],
+    "moodTags": ["luxury", "unique"],
+    "petTypes": ["all"],
+    "genders": ["female", "all"],
+    "source": "햇빛에 반짝이는 물결",
+    "meaning": "반짝이고 감성적인 이미지",
+    "story": "조용하지만 눈에 들어오는 매력을 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "nature_sol_001",
+    "name": "솔",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "자연을 닮은 이름",
+    "meaning": "소나무처럼 곧고 편안한 이미지",
+    "story": "차분하고 맑은 분위기를 가진 아이에게 잘 어울리는 단정한 이름이에요.",
+    "weight": 7,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "nature_mori_001",
+    "name": "모리",
+    "kinds": ["meaning"],
+    "moodTags": ["soft", "unique"],
+    "petTypes": ["all"],
+    "genders": ["all"],
+    "source": "숲을 떠올리게 하는 이름",
+    "meaning": "편안하고 자연스러운 힐링의 이미지",
+    "story": "곁에 있으면 마음이 안정되는 아이에게 잘 어울리는 이름이에요.",
+    "weight": 7,
+    "regionTags": ["global"]
+  }
+]

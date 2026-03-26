@@ -1,0 +1,67 @@
+[
+  {
+    "id": "myth_mir_001",
+    "name": "미르",
+    "kinds": ["myth", "meaning"],
+    "moodTags": ["unique", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["male", "all"],
+    "source": "한국 설화 속 용의 이미지",
+    "meaning": "강하지만 신비로운 존재감",
+    "story": "작아도 존재감이 묵직한 아이에게 잘 어울리는 이름이에요.",
+    "weight": 10,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "myth_haechi_001",
+    "name": "해치",
+    "kinds": ["myth"],
+    "moodTags": ["unique", "trendy"],
+    "petTypes": ["dog", "all"],
+    "genders": ["male", "all"],
+    "source": "한국 상상 동물 해치",
+    "meaning": "수호와 보호의 상징",
+    "story": "든든하고 씩씩한 분위기의 아이에게 잘 어울리는 이름이에요.",
+    "weight": 9,
+    "regionTags": ["korean"]
+  },
+  {
+    "id": "myth_apollo_001",
+    "name": "아폴로",
+    "kinds": ["myth"],
+    "moodTags": ["luxury", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["male", "all"],
+    "source": "그리스 신화",
+    "meaning": "태양과 빛의 이미지",
+    "story": "밝고 당당한 존재감을 가진 아이에게 잘 어울리는 이름이에요.",
+    "weight": 9,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "myth_artemis_001",
+    "name": "아르테미스",
+    "kinds": ["myth"],
+    "moodTags": ["soft", "unique"],
+    "petTypes": ["cat", "all"],
+    "genders": ["female", "all"],
+    "source": "그리스 신화",
+    "meaning": "자유롭고 독립적인 달의 이미지",
+    "story": "자기만의 리듬이 분명한 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["global"]
+  },
+  {
+    "id": "myth_loki_001",
+    "name": "로키",
+    "kinds": ["myth"],
+    "moodTags": ["unique", "trendy"],
+    "petTypes": ["all"],
+    "genders": ["male", "all"],
+    "source": "북유럽 신화",
+    "meaning": "장난기와 영리함의 이미지",
+    "story": "엉뚱하고 머리 회전이 빠른 아이에게 잘 어울리는 이름이에요.",
+    "weight": 8,
+    "regionTags": ["global"]
+  }
+]
