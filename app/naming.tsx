@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,431 +15,217 @@ import {
 import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
-import type { SavedPetProfile } from "../types";
+import type { PetGender, PetType } from "../types";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
-const NAMING_HISTORY_KEY = "mungnyang-naming-history";
 
-type NamingHistoryItem = {
+type SavedPetProfile = {
   id: string;
-  createdAt: string;
-  petId: string;
   petName: string;
-  flowKey: string;
-  soundKey: string;
-  impressionKey: string;
-  energyKey: string;
-  bondKey: string;
-  closingKey: string;
+  petType: PetType;
+  petGender: PetGender;
+  isNeutered: boolean;
+  breed: string;
+  birthDate: string;
+  birthTime: string;
+  isBirthTimeKnown: boolean;
 };
 
-type NamingResult = {
-  title: string;
-  summary: string;
-  nameFlow: string;
-  soundMood: string;
-  impression: string;
-  energyMatch: string;
-  ownerBond: string;
-  closing: string;
-  flowKey: string;
-  soundKey: string;
-  impressionKey: string;
-  energyKey: string;
-  bondKey: string;
-  closingKey: string;
-};
-
-const flowPool = [
-  {
-    key: "flow-soft",
-    title: "부드럽게 흐르는 이름",
-    summary:
-      "이 이름은 전반적으로 부드럽고 편안하게 이어지는 결이 강해요. 자주 불러도 부담이 적고 정이 천천히 깊어지는 느낌을 줄 수 있어요.",
-    detail:
-      "이름의 울림이 과하게 튀지 않아서 일상 속에서 자연스럽게 스며드는 장점이 있어요.",
-  },
-  {
-    key: "flow-bright",
-    title: "밝고 가벼운 이름",
-    summary:
-      "이 이름은 발음했을 때 밝고 통통 튀는 리듬감이 살아나는 편이에요. 친근하고 사랑스러운 인상을 만들기 쉬운 이름이에요.",
-    detail:
-      "짧게 불러도 생동감이 있고, 반응을 주고받는 상황에서 매력이 더 크게 느껴질 수 있어요.",
-  },
-  {
-    key: "flow-clear",
-    title: "또렷하게 남는 이름",
-    summary:
-      "이 이름은 발음의 선이 비교적 분명해서 기억에 잘 남는 흐름을 가지고 있어요.",
-    detail:
-      "부르면 인상이 선명하게 남는 편이라, 존재감 있는 분위기를 만들기 좋은 이름일 수 있어요.",
-  },
-  {
-    key: "flow-warm",
-    title: "따뜻한 정이 느껴지는 이름",
-    summary:
-      "이 이름은 듣는 순간 포근하고 정감 있는 분위기를 만들어주는 결이 있어요.",
-    detail:
-      "가까운 거리에서 자주 부를수록 더 애착이 깊어지는 이름의 흐름을 가진 편이에요.",
-  },
-  {
-    key: "flow-lovely",
-    title: "애칭처럼 사랑스러운 이름",
-    summary:
-      "이 이름은 자꾸 불러보고 싶게 만드는 친밀한 매력이 있어요. 애칭처럼 자연스럽게 입에 붙는 장점이 느껴져요.",
-    detail:
-      "가볍게 불러도 귀엽고 다정한 인상을 줄 수 있어서 정서적 교감과 잘 어울릴 수 있어요.",
-  },
-  {
-    key: "flow-elegant",
-    title: "정돈되고 세련된 이름",
-    summary:
-      "이 이름은 지나치게 가볍지 않고, 단정하면서도 세련된 인상을 주는 흐름이 있어요.",
-    detail:
-      "차분한 존재감과 안정적인 무드를 함께 느끼게 해주는 이름의 결이 살아 있어요.",
-  },
-];
-
-const soundPool = [
-  {
-    key: "sound-round",
-    text: "발음의 끝이 둥글고 부드럽게 떨어지는 편이라, 이름 전체에서 포근하고 편안한 분위기가 느껴질 수 있어요.",
-  },
-  {
-    key: "sound-light",
-    text: "발음의 텐션이 가볍고 산뜻해서, 귀엽고 통통 튀는 인상을 만들기 쉬운 이름이에요.",
-  },
-  {
-    key: "sound-stable",
-    text: "이름의 소리 결이 안정적이라 자주 불러도 질리지 않고, 일상적인 호칭으로 오래 잘 어울릴 가능성이 커요.",
-  },
-  {
-    key: "sound-soft-end",
-    text: "끝음이 부드럽게 감싸지는 느낌이 있어서 다정하고 친근한 무드를 주기 쉬워요.",
-  },
-  {
-    key: "sound-clear-end",
-    text: "끝음이 비교적 또렷해서 불렀을 때 존재감이 선명하게 살아나는 편이에요.",
-  },
-  {
-    key: "sound-cute-bounce",
-    text: "소리의 리듬이 귀엽고 가볍게 튀는 편이라, 애칭처럼 부르기 좋은 이름의 매력이 있어요.",
-  },
-];
-
-const impressionPool = [
-  {
-    key: "impression-friendly",
-    text: "처음 들었을 때도 거리감이 적고 친근하게 느껴지는 이름이라, 정이 빨리 붙는 인상을 줄 수 있어요.",
-  },
-  {
-    key: "impression-lovely",
-    text: "사랑스럽고 보호해주고 싶은 이미지가 자연스럽게 따라오는 이름의 분위기가 있어요.",
-  },
-  {
-    key: "impression-neat",
-    text: "단정하고 정리된 인상이 느껴져서 차분하고 안정적인 존재감으로 연결되기 쉬워요.",
-  },
-  {
-    key: "impression-bright",
-    text: "밝고 경쾌한 이미지가 먼저 떠오르는 편이라, 에너지 있는 아이와 특히 잘 어울릴 수 있어요.",
-  },
-  {
-    key: "impression-gentle",
-    text: "전체적으로 부드럽고 온순한 분위기를 만들어줘서, 차분한 매력을 가진 아이와 잘 맞을 가능성이 커요.",
-  },
-  {
-    key: "impression-special",
-    text: "흔한 느낌보다는 조금 더 특별하고 기억에 남는 인상을 주는 이름이에요.",
-  },
-];
-
-const energyPool = [
-  {
-    key: "energy-calm",
-    text: "전체적으로는 안정과 편안함 쪽의 기운이 강하게 느껴져요. 일상적인 교감 안에서 이름의 매력이 더 잘 살아날 수 있어요.",
-  },
-  {
-    key: "energy-lively",
-    text: "밝고 발랄한 기운이 깔려 있어서, 부를 때마다 생기 있는 분위기를 만들어줄 수 있어요.",
-  },
-  {
-    key: "energy-warm",
-    text: "따뜻하고 다정한 기운이 느껴져 보호자와의 정서적 거리감을 줄여주는 데 잘 어울릴 수 있어요.",
-  },
-  {
-    key: "energy-balanced",
-    text: "특정 방향으로 과하게 치우치지 않고 균형감 있게 느껴지는 이름이라 오래 불러도 편안할 가능성이 커요.",
-  },
-  {
-    key: "energy-soft-bond",
-    text: "강한 존재감보다 은근한 애착과 친밀감을 높여주는 쪽의 기운이 잘 살아 있어요.",
-  },
-  {
-    key: "energy-clean",
-    text: "맑고 깔끔한 인상이 느껴지는 이름이라, 선명하고 좋은 이미지를 오래 유지하기 쉬워요.",
-  },
-];
-
-const bondPool = [
-  {
-    key: "bond-close",
-    text: "보호자가 이 이름을 부를 때 애칭처럼 자연스럽게 정이 쌓일 가능성이 커요. 자주 부를수록 이름의 매력이 깊어질 수 있어요.",
-  },
-  {
-    key: "bond-comfort",
-    text: "이 이름은 부르는 사람과 듣는 사람 모두에게 비교적 편안한 감정을 주기 쉬워서, 관계의 온도를 부드럽게 유지해줄 수 있어요.",
-  },
-  {
-    key: "bond-affection",
-    text: "짧게 불러도 애정이 실리기 쉬운 구조라, 보호자와의 애착 표현에 잘 어울릴 수 있어요.",
-  },
-  {
-    key: "bond-trust",
-    text: "처음엔 잔잔하지만 시간이 갈수록 신뢰와 안정감이 쌓이는 관계에 특히 잘 어울리는 이름이에요.",
-  },
-  {
-    key: "bond-playful",
-    text: "반응을 주고받는 상황에서 이름의 매력이 더 크게 느껴져서, 놀이와 교감 속에서 정이 깊어지기 쉬워요.",
-  },
-  {
-    key: "bond-gentle",
-    text: "강한 자극보다는 차분한 애정과 돌봄의 분위기를 잘 담아내는 이름이라, 일상적인 케어와 잘 어울릴 수 있어요.",
-  },
-];
-
-const closingPool = [
-  {
-    key: "closing-1",
-    text: "전체적으로 이 이름은 자주 부를수록 더 좋은 결이 살아나는 타입이에요. 화려함보다 오래 곁에 두기 좋은 안정적인 매력이 느껴져요.",
-  },
-  {
-    key: "closing-2",
-    text: "이름 자체가 주는 인상이 부드럽고 정서적이라, 보호자와 아이 사이의 친밀감을 자연스럽게 깊게 만들어줄 가능성이 커요.",
-  },
-  {
-    key: "closing-3",
-    text: "과하게 튀지 않으면서도 기억에는 남는 이름이라, 일상 속에서 편안하게 사랑받기 좋은 작명 흐름이라고 볼 수 있어요.",
-  },
-  {
-    key: "closing-4",
-    text: "이 이름은 시간이 지날수록 더 잘 어울린다고 느껴질 가능성이 큰 타입이에요. 처음보다 나중에 더 애착이 깊어질 수 있어요.",
-  },
-  {
-    key: "closing-5",
-    text: "이름이 가진 부드러운 울림과 관계의 온도가 잘 맞아떨어질 가능성이 높아요. 오래 부를수록 정이 쌓이는 작명으로 보여요.",
-  },
-  {
-    key: "closing-6",
-    text: "전체적으로 균형감이 좋아서 특별히 과하지 않으면서도 충분히 사랑스러운 이름이에요. 일상 속에서 자연스럽게 빛나는 스타일이에요.",
-  },
-];
-
-function hashString(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
-
-function getTodayKey() {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function pickNonRecent<T extends { key: string }>(
-  pool: T[],
-  seed: number,
-  recentKeys: string[]
-) {
-  const filtered = pool.filter((item) => !recentKeys.includes(item.key));
-  const source = filtered.length > 0 ? filtered : pool;
-  return source[seed % source.length];
-}
-
-function buildNamingResult(args: {
-  pet: SavedPetProfile;
-  history: NamingHistoryItem[];
-}): NamingResult {
-  const { pet, history } = args;
-  const todayKey = getTodayKey();
-
-  const baseSeed = hashString(
-    `${pet.id}|${pet.petName}|${pet.petType}|${pet.petGender}|${pet.breed}|${pet.birthDate}|${pet.birthTime}|${todayKey}`
-  );
-
-  const petHistory = history.filter((item) => item.petId === pet.id).slice(0, 7);
-
-  const recentFlow = petHistory.map((item) => item.flowKey);
-  const recentSound = petHistory.map((item) => item.soundKey);
-  const recentImpression = petHistory.map((item) => item.impressionKey);
-  const recentEnergy = petHistory.map((item) => item.energyKey);
-  const recentBond = petHistory.map((item) => item.bondKey);
-  const recentClosing = petHistory.map((item) => item.closingKey);
-
-  const flow = pickNonRecent(flowPool, baseSeed + 1, recentFlow);
-  const sound = pickNonRecent(soundPool, baseSeed + 2, recentSound);
-  const impression = pickNonRecent(impressionPool, baseSeed + 3, recentImpression);
-  const energy = pickNonRecent(energyPool, baseSeed + 4, recentEnergy);
-  const bond = pickNonRecent(bondPool, baseSeed + 5, recentBond);
-  const closing = pickNonRecent(closingPool, baseSeed + 6, recentClosing);
-
-  const title = `"${pet.petName}" 이름 풀이`;
-  const summary = `${pet.petName}라는 이름은 "${flow.title}"의 흐름이 강하게 느껴져요. ${flow.summary}`;
-
-  return {
-    title,
-    summary,
-    nameFlow: `${flow.title} · ${flow.detail}`,
-    soundMood: sound.text,
-    impression: impression.text,
-    energyMatch: energy.text,
-    ownerBond: bond.text,
-    closing: closing.text,
-    flowKey: flow.key,
-    soundKey: sound.key,
-    impressionKey: impression.key,
-    energyKey: energy.key,
-    bondKey: bond.key,
-    closingKey: closing.key,
+type NamingApiResponse = {
+  success: boolean;
+  data?: {
+    petName: string;
+    nameEnergy: string;
+    summary: string;
+    firstImpression: string;
+    hiddenCharm: string;
+    relationshipFlow: string;
+    luckyPoint: string;
+    namingTip: string;
   };
+  message?: string;
+};
+
+function getApiBaseUrl() {
+  if (Platform.OS === "android") {
+    return "http://10.0.2.2:4000";
+  }
+
+  if (Platform.OS === "ios") {
+    return "http://localhost:4000";
+  }
+
+  return "http://localhost:4000";
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export default function NamingScreen() {
-  const [pets, setPets] = useState<SavedPetProfile[]>([]);
+  const [savedPets, setSavedPets] = useState<SavedPetProfile[]>([]);
   const [selectedPetId, setSelectedPetId] = useState("");
+  const [isLoadingPets, setIsLoadingPets] = useState(true);
+
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<NamingResult | null>(null);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  const [result, setResult] = useState<NamingApiResponse["data"] | null>(null);
 
   const selectedPet = useMemo(
-    () => pets.find((pet) => pet.id === selectedPetId) ?? null,
-    [pets, selectedPetId]
+    () => savedPets.find((pet) => pet.id === selectedPetId) ?? null,
+    [savedPets, selectedPetId]
   );
 
-  const loadPets = useCallback(async () => {
+  const loadingMessages = useMemo(
+    () => [
+      selectedPet
+        ? `${selectedPet.petName}라는 이름의 울림을 읽고 있어요...`
+        : "이름의 울림을 읽고 있어요...",
+      "이름이 주는 첫인상과 숨은 매력을 분석하고 있어요...",
+      "관계 흐름과 좋은 포인트를 정리하고 있어요...",
+      "작명풀이 결과를 보기 좋게 정리하고 있어요...",
+    ],
+    [selectedPet]
+  );
+
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingMessageIndex(0);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+    }, 900);
+
+    return () => clearInterval(timer);
+  }, [isLoading, loadingMessages.length]);
+
+  const loadSavedPets = useCallback(async () => {
     try {
-      const [petsRaw, currentPetRaw] = await Promise.all([
+      setIsLoadingPets(true);
+
+      const [savedPetsRaw, currentPetRaw] = await Promise.all([
         AsyncStorage.getItem(PET_STORAGE_KEY),
         AsyncStorage.getItem(CURRENT_PET_KEY),
       ]);
 
-      const parsedPets = petsRaw ? JSON.parse(petsRaw) : [];
-      const petList: SavedPetProfile[] = Array.isArray(parsedPets) ? parsedPets : [];
-      setPets(petList);
+      const parsedPets: SavedPetProfile[] = savedPetsRaw
+        ? JSON.parse(savedPetsRaw)
+        : [];
+      const pets = Array.isArray(parsedPets) ? parsedPets : [];
+      setSavedPets(pets);
 
-      if (currentPetRaw) {
-        const currentPet: SavedPetProfile = JSON.parse(currentPetRaw);
-        const exists = petList.some((pet) => pet.id === currentPet.id);
-        if (exists) {
-          setSelectedPetId(currentPet.id);
-          return;
-        }
+      if (pets.length === 0) {
+        setSelectedPetId("");
+        return;
       }
 
-      if (petList.length > 0) {
-        setSelectedPetId(petList[0].id);
+      const parsedCurrentPet: SavedPetProfile | null = currentPetRaw
+        ? JSON.parse(currentPetRaw)
+        : null;
+
+      if (
+        parsedCurrentPet &&
+        pets.some((pet) => pet.id === parsedCurrentPet.id)
+      ) {
+        setSelectedPetId(parsedCurrentPet.id);
       } else {
-        setSelectedPetId("");
+        setSelectedPetId(pets[0].id);
       }
     } catch (error) {
-      console.error("반려동물 목록 불러오기 실패", error);
-      setPets([]);
+      console.error("작명풀이용 반려동물 목록 불러오기 실패", error);
+      setSavedPets([]);
       setSelectedPetId("");
+    } finally {
+      setIsLoadingPets(false);
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadPets();
-    }, [loadPets])
+      loadSavedPets();
+    }, [loadSavedPets])
   );
 
-  const handleAnalyze = async () => {
-    if (!selectedPet) return;
+  const handleAnalyzeNaming = async () => {
+    if (!selectedPet) {
+      Alert.alert("선택 필요", "등록된 반려동물을 먼저 선택해주세요.");
+      return;
+    }
 
     setIsLoading(true);
     setResult(null);
 
     try {
-      const historyRaw = await AsyncStorage.getItem(NAMING_HISTORY_KEY);
-      const parsedHistory = historyRaw ? JSON.parse(historyRaw) : [];
-      const history: NamingHistoryItem[] = Array.isArray(parsedHistory)
-        ? parsedHistory
-        : [];
+      await AsyncStorage.setItem(CURRENT_PET_KEY, JSON.stringify(selectedPet));
 
-      const generated = buildNamingResult({
-        pet: selectedPet,
-        history,
-      });
+      const [response] = await Promise.all([
+        fetch(`${getApiBaseUrl()}/api/premium/naming`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            petName: selectedPet.petName,
+            petType: selectedPet.petType,
+            petGender: selectedPet.petGender,
+            birthDate: selectedPet.birthDate,
+          }),
+        }),
+        wait(2300),
+      ]);
 
-      const historyItem: NamingHistoryItem = {
-        id: `${Date.now()}-${selectedPet.id}`,
-        createdAt: new Date().toISOString(),
-        petId: selectedPet.id,
-        petName: selectedPet.petName,
-        flowKey: generated.flowKey,
-        soundKey: generated.soundKey,
-        impressionKey: generated.impressionKey,
-        energyKey: generated.energyKey,
-        bondKey: generated.bondKey,
-        closingKey: generated.closingKey,
-      };
+      const json = (await response.json()) as NamingApiResponse;
 
-      const updatedHistory = [historyItem, ...history].slice(0, 100);
-      await AsyncStorage.setItem(
-        NAMING_HISTORY_KEY,
-        JSON.stringify(updatedHistory)
-      );
+      if (!response.ok || !json.success || !json.data) {
+        throw new Error(json.message ?? "작명풀이를 불러오지 못했어요.");
+      }
 
-      setTimeout(() => {
-        setResult(generated);
-        setIsLoading(false);
-      }, 2200);
+      setResult(json.data);
     } catch (error) {
-      console.error("이름 풀이 실패", error);
+      console.error("작명풀이 API 호출 실패", error);
+      Alert.alert(
+        "작명풀이 불러오기 실패",
+        "서버와 연결하지 못했어요. 서버 실행 상태를 확인해주세요."
+      );
+    } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.heroCard}>
-        <View style={styles.heroBadge}>
-          <Text style={styles.heroBadgeText}>NAMING ANALYSIS</Text>
-        </View>
-
-        <Text style={styles.heroTitle}>이름 풀이 ✍️</Text>
-        <Text style={styles.heroSubtitle}>
-          현재 이름이 주는 울림과 분위기, 정서적인 결을 더 섬세하게 읽어드려요.
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>✍️ 작명 풀이</Text>
+        <Text style={styles.headerSub}>
+          등록된 반려동물을 선택하고 이름이 가진 울림과 기운을 깊게 살펴봐요.
         </Text>
       </View>
 
       <SectionCard>
         <Text style={styles.sectionTitle}>반려동물 선택</Text>
 
-        {pets.length === 0 ? (
+        {isLoadingPets ? (
+          <Text style={styles.helperText}>등록된 반려동물을 불러오는 중...</Text>
+        ) : savedPets.length === 0 ? (
           <Text style={styles.helperText}>
-            등록된 반려동물이 없어요. 먼저 아이를 등록해 주세요.
+            등록된 반려동물이 없어요. 먼저 아이를 등록해주세요.
           </Text>
         ) : (
-          <View style={styles.petChipWrap}>
-            {pets.map((pet) => {
-              const active = selectedPetId === pet.id;
+          <View style={styles.petList}>
+            {savedPets.map((pet) => {
+              const active = pet.id === selectedPetId;
               return (
                 <Pressable
                   key={pet.id}
                   style={[styles.petChip, active && styles.petChipActive]}
-                  onPress={() => setSelectedPetId(pet.id)}
+                  onPress={() => {
+                    setSelectedPetId(pet.id);
+                    setResult(null);
+                  }}
                 >
                   <Text
                     style={[
@@ -453,11 +241,24 @@ export default function NamingScreen() {
           </View>
         )}
 
-        <View style={styles.actionWrap}>
+        {selectedPet && (
+          <View style={styles.selectedPetCard}>
+            <Text style={styles.selectedPetTitle}>
+              {selectedPet.petType === "cat" ? "🐱" : "🐶"}{" "}
+              {selectedPet.petName}
+            </Text>
+            <Text style={styles.selectedPetMeta}>{selectedPet.breed}</Text>
+            <Text style={styles.selectedPetMeta}>
+              생일 · {selectedPet.birthDate}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.submitWrap}>
           <AppButton
-            title="이름 풀이하기"
-            onPress={handleAnalyze}
-            disabled={!selectedPet || isLoading}
+            title={isLoading ? "분석 중..." : "작명 풀이하기"}
+            onPress={handleAnalyzeNaming}
+            variant="secondary"
           />
         </View>
       </SectionCard>
@@ -469,9 +270,9 @@ export default function NamingScreen() {
               {selectedPet?.petType === "cat" ? "🐱" : "🐶"}
             </Text>
             <ActivityIndicator size="large" color={COLORS.secondary} />
-            <Text style={styles.loadingTitle}>이름을 해석하는 중...</Text>
+            <Text style={styles.loadingTitle}>이름의 기운을 분석하고 있어요</Text>
             <Text style={styles.loadingDesc}>
-              이름이 가진 울림과 정서적인 흐름을 읽고 있어요.
+              {loadingMessages[loadingMessageIndex]}
             </Text>
           </View>
         </SectionCard>
@@ -480,46 +281,46 @@ export default function NamingScreen() {
       {!isLoading && result && (
         <>
           <SectionCard>
-            <View style={styles.todayCard}>
-              <Text style={styles.todayLabel}>NAME REPORT</Text>
-              <Text style={styles.todayTitle}>{result.title}</Text>
-              <Text style={styles.todaySummary}>{result.summary}</Text>
+            <Text style={styles.sectionTitle}>이름의 전체 기운</Text>
+            <View style={styles.energyCard}>
+              <Text style={styles.energyValue}>{result.nameEnergy}</Text>
+              <Text style={styles.energyName}>{result.petName}</Text>
             </View>
           </SectionCard>
 
           <SectionCard>
-            <Text style={styles.sectionTitle}>이름 해석</Text>
-
-            <View style={styles.resultCard}>
-              <Text style={styles.resultCardTitle}>이름의 결</Text>
-              <Text style={styles.resultCardDesc}>{result.nameFlow}</Text>
-            </View>
-
-            <View style={styles.resultCard}>
-              <Text style={styles.resultCardTitle}>발음 분위기</Text>
-              <Text style={styles.resultCardDesc}>{result.soundMood}</Text>
-            </View>
-
-            <View style={styles.resultCard}>
-              <Text style={styles.resultCardTitle}>주는 인상</Text>
-              <Text style={styles.resultCardDesc}>{result.impression}</Text>
-            </View>
-
-            <View style={styles.resultCard}>
-              <Text style={styles.resultCardTitle}>잘 맞는 기운</Text>
-              <Text style={styles.resultCardDesc}>{result.energyMatch}</Text>
-            </View>
-
-            <View style={styles.resultCard}>
-              <Text style={styles.resultCardTitle}>보호자에게 느껴지는 이미지</Text>
-              <Text style={styles.resultCardDesc}>{result.ownerBond}</Text>
+            <Text style={styles.sectionTitle}>전체 풀이</Text>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryText}>{result.summary}</Text>
             </View>
           </SectionCard>
 
           <SectionCard>
-            <Text style={styles.sectionTitle}>총평</Text>
-            <View style={styles.closingCard}>
-              <Text style={styles.closingText}>{result.closing}</Text>
+            <Text style={styles.sectionTitle}>세부 작명 풀이</Text>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statTitle}>✨ 이름의 첫인상</Text>
+              <Text style={styles.statDesc}>{result.firstImpression}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statTitle}>💎 숨은 매력</Text>
+              <Text style={styles.statDesc}>{result.hiddenCharm}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statTitle}>🤝 관계 흐름</Text>
+              <Text style={styles.statDesc}>{result.relationshipFlow}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statTitle}>🍀 좋은 포인트</Text>
+              <Text style={styles.statDesc}>{result.luckyPoint}</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statTitle}>🫶 이름 활용 팁</Text>
+              <Text style={styles.statDesc}>{result.namingTip}</Text>
             </View>
           </SectionCard>
         </>
@@ -538,47 +339,32 @@ const styles = StyleSheet.create({
     paddingBottom: 44,
     gap: 16,
   },
-  heroCard: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 26,
-    padding: 22,
+  header: {
+    marginBottom: 4,
   },
-  heroBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: COLORS.accentSoft,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 12,
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: COLORS.text,
   },
-  heroBadgeText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: COLORS.primary,
-  },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  heroSubtitle: {
-    marginTop: 10,
-    fontSize: 15,
-    lineHeight: 24,
-    color: "#F5ECE5",
+  headerSub: {
+    marginTop: 6,
+    fontSize: 14,
+    color: COLORS.subText,
+    lineHeight: 21,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   helperText: {
     fontSize: 14,
     lineHeight: 22,
     color: COLORS.subText,
   },
-  petChipWrap: {
+  petList: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
@@ -600,12 +386,28 @@ const styles = StyleSheet.create({
   petChipTextActive: {
     color: COLORS.text,
   },
-  actionWrap: {
+  selectedPetCard: {
+    marginTop: 14,
+    backgroundColor: "#FFF8F0",
+    borderRadius: 18,
+    padding: 14,
+  },
+  selectedPetTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+  selectedPetMeta: {
+    marginTop: 6,
+    fontSize: 13,
+    color: COLORS.subText,
+  },
+  submitWrap: {
     marginTop: 18,
   },
   loadingBox: {
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: 10,
   },
   loadingEmoji: {
     fontSize: 34,
@@ -618,60 +420,57 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   loadingDesc: {
-    marginTop: 8,
+    marginTop: 10,
     fontSize: 14,
     lineHeight: 22,
     color: COLORS.subText,
     textAlign: "center",
+    paddingHorizontal: 16,
   },
-  todayCard: {
-    backgroundColor: "#FFF7EF",
+  energyCard: {
+    backgroundColor: "#FFF5EB",
     borderRadius: 20,
-    padding: 18,
+    paddingVertical: 24,
+    paddingHorizontal: 18,
+    alignItems: "center",
   },
-  todayLabel: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: COLORS.secondary,
-    letterSpacing: 0.6,
-  },
-  todayTitle: {
-    marginTop: 8,
+  energyValue: {
     fontSize: 24,
     fontWeight: "900",
     color: COLORS.text,
+    textAlign: "center",
   },
-  todaySummary: {
-    marginTop: 12,
+  energyName: {
+    marginTop: 8,
     fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.subText,
+    fontWeight: "700",
+    color: COLORS.secondary,
   },
-  resultCard: {
+  summaryCard: {
+    backgroundColor: "#FFF8F0",
+    borderRadius: 18,
+    padding: 16,
+  },
+  summaryText: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: COLORS.text,
+  },
+  statCard: {
     backgroundColor: "#F7F2ED",
     borderRadius: 16,
     padding: 14,
     marginTop: 10,
   },
-  resultCardTitle: {
+  statTitle: {
     fontSize: 15,
     fontWeight: "800",
     color: COLORS.text,
   },
-  resultCardDesc: {
+  statDesc: {
     marginTop: 6,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 21,
     color: COLORS.subText,
-  },
-  closingCard: {
-    backgroundColor: "#FFF8F0",
-    borderRadius: 18,
-    padding: 16,
-  },
-  closingText: {
-    fontSize: 14,
-    lineHeight: 24,
-    color: COLORS.text,
   },
 });

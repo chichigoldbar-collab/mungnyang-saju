@@ -187,8 +187,11 @@ export default function HistoryScreen() {
             {filteredHistory.length === 0 ? (
               <Text style={styles.helperText}>아직 이 아이의 운세 기록이 없어요.</Text>
             ) : (
-              filteredHistory.map((item) => (
-                <View key={item.id} style={styles.historyCard}>
+              filteredHistory.map((item, index) => (
+                <View
+    key={`${item.id ?? "history"}-${item.createdAt ?? "no-date"}-${index}`}
+    style={styles.historyCard}
+  >
                   <Text style={styles.historyDate}>{formatDateTime(item.createdAt)}</Text>
 
                   <View style={styles.historyBlock}>

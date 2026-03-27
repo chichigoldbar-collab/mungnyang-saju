@@ -73,7 +73,7 @@ export default function PremiumScreen() {
           <View style={styles.featureItem}>
             <Text style={styles.featureEmoji}>📝</Text>
             <View style={styles.featureTextWrap}>
-              <Text style={styles.featureTitle}>작명 풀이 / 이름 추천</Text>
+              <Text style={styles.featureTitle}>작명 풀이</Text>
               <Text style={styles.featureDesc}>
                 현재 이름의 인상과 새로운 추천 이름 제공
               </Text>
@@ -103,7 +103,7 @@ export default function PremiumScreen() {
           onPress={() => router.push("/(tabs)/naming")}
         >
           <View style={styles.previewLeft}>
-            <Text style={styles.previewTitle}>📝 작명 풀이 / 이름 추천</Text>
+            <Text style={styles.previewTitle}>📝 작명 풀이</Text>
             <Text style={styles.previewDesc}>
               이름의 느낌과 어울리는 추천 이름을 볼 수 있어요
             </Text>
