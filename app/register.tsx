@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -33,14 +33,36 @@ type SavedPetProfile = {
 
 const DOG_BREEDS = [
   "말티즈",
+  "말티푸",
   "포메라니안",
   "푸들",
-  "비숑",
+  "토이푸들",
+  "미니어처푸들",
+  "비숑프리제",
   "치와와",
   "시츄",
-  "골든리트리버",
+  "요크셔테리어",
+  "닥스훈트",
   "웰시코기",
+  "골든리트리버",
+  "래브라도리트리버",
   "진돗개",
+  "시바견",
+  "프렌치불도그",
+  "퍼그",
+  "스피츠",
+  "보더콜리",
+  "슈나우저",
+  "코카스파니엘",
+  "비글",
+  "사모예드",
+  "알래스칸말라뮤트",
+  "시베리안허스키",
+  "파피용",
+  "페키니즈",
+  "보스턴테리어",
+  "도베르만",
+  "셰틀랜드쉽독",
   "믹스견",
   "직접 입력",
 ];
@@ -50,10 +72,23 @@ const CAT_BREEDS = [
   "페르시안",
   "러시안블루",
   "브리티시숏헤어",
+  "브리티시롱헤어",
   "랙돌",
   "스코티시폴드",
   "샴",
   "먼치킨",
+  "노르웨이숲",
+  "메인쿤",
+  "벵갈",
+  "터키시앙고라",
+  "아비시니안",
+  "봄베이",
+  "아메리칸숏헤어",
+  "엑조틱숏헤어",
+  "스핑크스",
+  "버만",
+  "데본렉스",
+  "코니시렉스",
   "믹스묘",
   "직접 입력",
 ];
@@ -117,7 +152,14 @@ function createPetId() {
   return `pet-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-type SelectorType = "year" | "month" | "day" | "hour" | "minute" | null;
+type SelectorType =
+  | "breed"
+  | "year"
+  | "month"
+  | "day"
+  | "hour"
+  | "minute"
+  | null;
 
 function SelectorModal({
   visible,
@@ -182,6 +224,7 @@ export default function RegisterScreen() {
   const params = useLocalSearchParams();
 
   const editId = String(params.editId ?? "");
+  const didInitEditRef = useRef(false);
 
   const [petName, setPetName] = useState("");
   const [customBreedInput, setCustomBreedInput] = useState("");
@@ -200,21 +243,29 @@ export default function RegisterScreen() {
   const [selectorType, setSelectorType] = useState<SelectorType>(null);
 
   const breedOptions = useMemo(() => getBreedOptions(selectedType), [selectedType]);
-  const dayOptions = useMemo(() => getDaysInMonth(birthYear, birthMonth), [birthYear, birthMonth]);
+  const dayOptions = useMemo(
+    () => getDaysInMonth(birthYear, birthMonth),
+    [birthYear, birthMonth]
+  );
 
   useEffect(() => {
+    if (!editId) return;
+    if (didInitEditRef.current) return;
+  
     const editPetName = String(params.petName ?? "");
     if (!editPetName) return;
-
+  
+    didInitEditRef.current = true;
+  
+    const nextType = String(params.petType ?? "dog") as PetType;
+    const breed = String(params.breed ?? "");
+    const options = getBreedOptions(nextType);
+  
     setPetName(editPetName);
-    setSelectedType(String(params.petType ?? "dog") as PetType);
+    setSelectedType(nextType);
     setSelectedGender(String(params.petGender ?? "male") as PetGender);
     setIsNeutered(String(params.isNeutered ?? "false") === "true");
-
-    const breed = String(params.breed ?? "");
-    const type = String(params.petType ?? "dog") as PetType;
-    const options = getBreedOptions(type);
-
+  
     if (options.includes(breed)) {
       setSelectedBreed(breed);
       setCustomBreedInput("");
@@ -224,20 +275,21 @@ export default function RegisterScreen() {
         breed === "견종 미입력" || breed === "묘종 미입력" ? "" : breed
       );
     }
-
+  
     const birthDate = String(params.birthDate ?? "");
     const birthTime = String(params.birthTime ?? "");
     const dateParts = parseBirthDateToParts(birthDate);
     const timeParts = parseBirthTimeToParts(birthTime);
-
+  
     setBirthYear(dateParts.year);
     setBirthMonth(dateParts.month);
     setBirthDay(dateParts.day);
     setBirthHour(timeParts.hour);
     setBirthMinute(timeParts.minute);
-
+  
     setIsBirthTimeKnown(String(params.isBirthTimeKnown ?? "false") === "true");
-  }, [params]);
+  }, [editId]);
+
 
   useEffect(() => {
     const options = getBreedOptions(selectedType);
@@ -245,7 +297,7 @@ export default function RegisterScreen() {
       setSelectedBreed("");
       setCustomBreedInput("");
     }
-  }, [selectedType]);
+  }, [selectedType, selectedBreed]);
 
   useEffect(() => {
     if (birthYear && birthMonth && birthDay) {
@@ -272,6 +324,8 @@ export default function RegisterScreen() {
 
   const handleSaveAndGoFortune = async () => {
     if (!petName.trim()) return;
+    if (!selectedBreed) return;
+    if (selectedBreed === "직접 입력" && !customBreedInput.trim()) return;
 
     const finalBreed = getFinalBreed();
     const finalBirthDate = formatBirthDate(birthYear, birthMonth, birthDay);
@@ -345,7 +399,11 @@ export default function RegisterScreen() {
 
   return (
     <>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.heroCard}>
           <View style={styles.heroBadge}>
             <Text style={styles.heroBadgeText}>REGISTER</Text>
@@ -431,22 +489,14 @@ export default function RegisterScreen() {
           </View>
 
           <Text style={styles.label}>품종</Text>
-          <View style={styles.chipWrap}>
-            {breedOptions.map((breed) => {
-              const active = selectedBreed === breed;
-              return (
-                <Pressable
-                  key={breed}
-                  style={[styles.breedChip, active && styles.breedChipActive]}
-                  onPress={() => setSelectedBreed(breed)}
-                >
-                  <Text style={[styles.breedChipText, active && styles.breedChipTextActive]}>
-                    {breed}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Pressable
+            style={styles.selectButton}
+            onPress={() => setSelectorType("breed")}
+          >
+            <Text style={styles.selectButtonText}>
+              {selectedBreed || "품종을 선택하세요"}
+            </Text>
+          </Pressable>
 
           {selectedBreed === "직접 입력" && (
             <TextInput
@@ -510,13 +560,17 @@ export default function RegisterScreen() {
                 <View style={styles.birthRow}>
                   <Pressable style={styles.dateSelectButton} onPress={() => setSelectorType("hour")}>
                     <Text style={styles.dateSelectLabel}>
-                      {birthHour !== undefined ? `${String(birthHour).padStart(2, "0")}시` : "시 선택"}
+                      {birthHour !== undefined
+                        ? `${String(birthHour).padStart(2, "0")}시`
+                        : "시 선택"}
                     </Text>
                   </Pressable>
 
                   <Pressable style={styles.dateSelectButton} onPress={() => setSelectorType("minute")}>
                     <Text style={styles.dateSelectLabel}>
-                      {birthMinute !== undefined ? `${String(birthMinute).padStart(2, "0")}분` : "분 선택"}
+                      {birthMinute !== undefined
+                        ? `${String(birthMinute).padStart(2, "0")}분`
+                        : "분 선택"}
                     </Text>
                   </Pressable>
                 </View>
@@ -534,6 +588,21 @@ export default function RegisterScreen() {
         </SectionCard>
       </ScrollView>
 
+      <SelectorModal
+        visible={selectorType === "breed"}
+        title={selectedType === "dog" ? "견종 선택" : "묘종 선택"}
+        options={breedOptions}
+        selectedValue={selectedBreed}
+        onSelect={(value) => {
+          const nextBreed = String(value);
+          setSelectedBreed(nextBreed);
+
+          if (nextBreed !== "직접 입력") {
+            setCustomBreedInput("");
+          }
+        }}
+        onClose={() => setSelectorType(null)}
+      />
       <SelectorModal
         visible={selectorType === "year"}
         title="년 선택"
@@ -626,16 +695,18 @@ const styles = StyleSheet.create({
   choiceButtonActive: { backgroundColor: COLORS.accent },
   choiceText: { fontSize: 15, fontWeight: "700", color: "#6B625C" },
   choiceTextActive: { color: COLORS.text },
-  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  breedChip: {
+  selectButton: {
     backgroundColor: "#F7F2ED",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    justifyContent: "center",
   },
-  breedChipActive: { backgroundColor: COLORS.accent },
-  breedChipText: { fontSize: 14, fontWeight: "700", color: "#6B625C" },
-  breedChipTextActive: { color: COLORS.text },
+  selectButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
   birthRow: { flexDirection: "row", gap: 10 },
   dateSelectButton: {
     flex: 1,
@@ -645,7 +716,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dateSelectLabel: { fontSize: 14, fontWeight: "700", color: COLORS.text },
-  selectedDateText: { marginTop: 10, fontSize: 13, color: COLORS.muted, lineHeight: 18 },
+  selectedDateText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: COLORS.muted,
+    lineHeight: 18,
+  },
   formButtonRow: { flexDirection: "row", gap: 10, marginTop: 22 },
   formButtonHalf: { flex: 1 },
   modalOverlay: {
@@ -660,7 +736,12 @@ const styles = StyleSheet.create({
     padding: 20,
     maxHeight: "70%",
   },
-  modalTitle: { fontSize: 20, fontWeight: "800", color: COLORS.text, marginBottom: 12 },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginBottom: 12,
+  },
   modalList: { marginBottom: 14 },
   modalOptionButton: {
     backgroundColor: "#F7F2ED",

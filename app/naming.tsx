@@ -16,6 +16,7 @@ import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
+import { saveHistoryItem } from "../utils/historyStorage";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
@@ -183,6 +184,17 @@ export default function NamingScreen() {
       if (!response.ok || !json.success || !json.data) {
         throw new Error(json.message ?? "작명풀이를 불러오지 못했어요.");
       }
+
+      await saveHistoryItem({
+        id: `naming-${selectedPet.id}-${Date.now()}`,
+        petId: selectedPet.id,
+        petName: selectedPet.petName,
+        createdAt: new Date().toISOString(),
+        analysisType: "naming",
+        title: "작명 풀이",
+        summary: json.data.summary,
+        payload: json.data,
+      });
 
       setResult(json.data);
     } catch (error) {
