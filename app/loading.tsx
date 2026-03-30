@@ -12,6 +12,7 @@ import {
 
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
+import { showInterstitialAd } from "../utils/ads";
 
 const DAILY_FORTUNE_CACHE_KEY = "mungnyang-daily-fortune-cache";
 const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
@@ -161,25 +162,27 @@ export default function LoadingScreen() {
 
     const fetchDailyFortune = async () => {
       try {
-        const [response] = await Promise.all([
-          fetch(`${getApiBaseUrl()}/api/fortune/daily`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              petId,
-              petName,
-              petType,
-              petGender,
-              isNeutered,
-              breed,
-              birthDate,
-              birthTime,
-            }),
-          }),
-          wait(2300),
-        ]);
+        await showInterstitialAd();
+
+const [response] = await Promise.all([
+  fetch(`${getApiBaseUrl()}/api/fortune/daily`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      petId,
+      petName,
+      petType,
+      petGender,
+      isNeutered,
+      breed,
+      birthDate,
+      birthTime,
+    }),
+  }),
+  wait(1200),
+]);
 
         const json = (await response.json()) as FortuneApiResponse;
 

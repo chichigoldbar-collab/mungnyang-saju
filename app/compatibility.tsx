@@ -15,12 +15,17 @@ import {
 } from "react-native";
 
 import AppButton from "../components/AppButton";
+import PremiumBadge from "../components/PremiumBadge";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
+import { preloadInterstitialAd, showInterstitialAd } from "../utils/ads";
+import { isPremiumUser } from "../utils/premiumAccess";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
+const COMPATIBILITY_AD_HISTORY_KEY = "mungnyang-compatibility-ad-history";
+const COMPATIBILITY_RESULT_CACHE_KEY = "mungnyang-compatibility-result-cache";
 
 type SavedPetProfile = {
   id: string;
@@ -34,18 +39,28 @@ type SavedPetProfile = {
   isBirthTimeKnown: boolean;
 };
 
+type CompatibilityResultData = {
+  score: number;
+  grade: string;
+  summary: string;
+  chemistry: string;
+  strength: string;
+  caution: string;
+  tip: string;
+};
+
 type CompatibilityApiResponse = {
   success: boolean;
-  data?: {
-    score: number;
-    grade: string;
-    summary: string;
-    chemistry: string;
-    strength: string;
-    caution: string;
-    tip: string;
-  };
+  data?: CompatibilityResultData;
   message?: string;
+};
+
+type CompatibilityCacheItem = {
+  petId: string;
+  ownerName: string;
+  ownerBirthDate: string;
+  result: CompatibilityResultData;
+  updatedAt: string;
 };
 
 type PickerMode = "year" | "month" | "day" | null;
@@ -86,7 +101,79 @@ function buildYearOptions() {
   return years;
 }
 
+async function getCompatibilityAdHistory() {
+  try {
+    const raw = await AsyncStorage.getItem(COMPATIBILITY_AD_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.error("궁합 광고 기록 불러오기 실패", error);
+    return {};
+  }
+}
+
+async function shouldShowCompatibilityAd(petId: string) {
+  if (!petId) return false;
+
+  const history = await getCompatibilityAdHistory();
+  return history[petId] !== true;
+}
+
+async function markCompatibilityAdShown(petId: string) {
+  if (!petId) return;
+
+  try {
+    const history = await getCompatibilityAdHistory();
+    history[petId] = true;
+    await AsyncStorage.setItem(
+      COMPATIBILITY_AD_HISTORY_KEY,
+      JSON.stringify(history)
+    );
+  } catch (error) {
+    console.error("궁합 광고 기록 저장 실패", error);
+  }
+}
+
+async function getCompatibilityCacheMap() {
+  try {
+    const raw = await AsyncStorage.getItem(COMPATIBILITY_RESULT_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.error("궁합 캐시 불러오기 실패", error);
+    return {};
+  }
+}
+
+async function saveCompatibilityResult(
+  petId: string,
+  ownerName: string,
+  ownerBirthDate: string,
+  result: CompatibilityResultData
+) {
+  try {
+    const cacheMap = await getCompatibilityCacheMap();
+
+    cacheMap[petId] = {
+      petId,
+      ownerName,
+      ownerBirthDate,
+      result,
+      updatedAt: new Date().toISOString(),
+    } satisfies CompatibilityCacheItem;
+
+    await AsyncStorage.setItem(
+      COMPATIBILITY_RESULT_CACHE_KEY,
+      JSON.stringify(cacheMap)
+    );
+  } catch (error) {
+    console.error("궁합 결과 저장 실패", error);
+  }
+}
+
 export default function CompatibilityScreen() {
+  const [isPremium, setIsPremium] = useState(false);
+
   const [savedPets, setSavedPets] = useState<SavedPetProfile[]>([]);
   const [selectedPetId, setSelectedPetId] = useState<string>("");
   const [isLoadingPets, setIsLoadingPets] = useState(true);
@@ -100,9 +187,7 @@ export default function CompatibilityScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
 
-  const [result, setResult] = useState<CompatibilityApiResponse["data"] | null>(
-    null
-  );
+  const [result, setResult] = useState<CompatibilityResultData | null>(null);
 
   const yearOptions = useMemo(() => buildYearOptions(), []);
   const monthOptions = useMemo(
@@ -194,9 +279,64 @@ export default function CompatibilityScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadSavedPets();
+      const load = async () => {
+        await loadSavedPets();
+        const premium = await isPremiumUser();
+        setIsPremium(premium);
+        preloadInterstitialAd();
+      };
+
+      load();
     }, [loadSavedPets])
   );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadCompatibilityForSelectedPet = async () => {
+      if (!selectedPetId) {
+        setResult(null);
+        return;
+      }
+
+      try {
+        const cacheMap = await getCompatibilityCacheMap();
+        if (isCancelled) return;
+
+        const cached = cacheMap[selectedPetId] as
+          | CompatibilityCacheItem
+          | undefined;
+
+        if (cached?.result) {
+          setResult(cached.result);
+          setOwnerName(cached.ownerName ?? "");
+
+          const [year, month, day] = String(cached.ownerBirthDate ?? "")
+            .split("-")
+            .map(Number);
+
+          if (year && month && day) {
+            setOwnerBirthYear(year);
+            setOwnerBirthMonth(month);
+            setOwnerBirthDay(day);
+          }
+        } else {
+          setResult(null);
+        }
+      } catch (error) {
+        console.error("선택된 반려동물 궁합 캐시 불러오기 실패", error);
+        if (!isCancelled) {
+          setResult(null);
+        }
+      }
+    };
+
+    loadCompatibilityForSelectedPet();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedPetId]);
 
   const handleSelectYear = (year: number) => {
     setOwnerBirthYear(year);
@@ -236,6 +376,14 @@ export default function CompatibilityScreen() {
     setResult(null);
 
     try {
+      const needAd = await shouldShowCompatibilityAd(selectedPet.id);
+
+      if (needAd) {
+        await showInterstitialAd();
+        await markCompatibilityAdShown(selectedPet.id);
+        preloadInterstitialAd();
+      }
+
       const [response] = await Promise.all([
         fetch(`${getApiBaseUrl()}/api/analysis/compatibility`, {
           method: "POST",
@@ -257,6 +405,13 @@ export default function CompatibilityScreen() {
       if (!response.ok || !json.success || !json.data) {
         throw new Error(json.message ?? "궁합 결과를 불러오지 못했어요.");
       }
+
+      await saveCompatibilityResult(
+        selectedPet.id,
+        ownerName.trim(),
+        ownerBirthDate,
+        json.data
+      );
 
       setResult(json.data);
     } catch (error) {
@@ -323,6 +478,12 @@ export default function CompatibilityScreen() {
     <>
       <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
         <View style={styles.header}>
+          {isPremium && (
+            <View style={styles.premiumBadgeWrap}>
+              <PremiumBadge label="광고 제거 적용" />
+            </View>
+          )}
+
           <Text style={styles.headerTitle}>💞 보호자 궁합</Text>
           <Text style={styles.headerSub}>
             등록된 반려동물을 선택하고 보호자 정보를 입력해 궁합을 확인해보세요.
@@ -521,11 +682,14 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 44,
+    paddingBottom: 120,
     gap: 16,
   },
   header: {
     marginBottom: 4,
+  },
+  premiumBadgeWrap: {
+    marginBottom: 10,
   },
   headerTitle: {
     fontSize: 26,

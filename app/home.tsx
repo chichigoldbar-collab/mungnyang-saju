@@ -12,11 +12,14 @@ import {
   Text,
   View,
 } from "react-native";
+import PremiumBadge from "../components/PremiumBadge";
+import { isPremiumUser } from "../utils/premiumAccess";
 
 import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
+import { preloadInterstitialAd, showInterstitialAd } from "../utils/ads";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
@@ -120,6 +123,8 @@ function wait(ms: number) {
 }
 
 export default function HomeScreen() {
+  const [isPremium, setIsPremium] = useState(false);
+
   const [savedPets, setSavedPets] = useState<SavedPetProfile[]>([]);
   const [dailyCacheMap, setDailyCacheMap] = useState<
     Record<string, DailyFortuneCacheItem>
@@ -167,7 +172,14 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadSavedData();
+      const load = async () => {
+        await loadSavedData();
+        const premium = await isPremiumUser();
+        setIsPremium(premium);
+        preloadInterstitialAd();
+      };
+  
+      load();
     }, [loadSavedData])
   );
 
@@ -330,7 +342,14 @@ export default function HomeScreen() {
   const handleRecommendNames = async () => {
     try {
       setIsNameLoading(true);
+  
+      const isFirstRecommend = recommendations.length === 0;
       setRecommendations([]);
+  
+      if (isFirstRecommend) {
+        await showInterstitialAd();
+        preloadInterstitialAd();
+      }
   
       const [response] = await Promise.all([
         fetch(`${getApiBaseUrl()}/api/names/recommend`, {
@@ -357,8 +376,8 @@ export default function HomeScreen() {
   
       setRecommendations(json.data);
     } catch (error) {
-      console.error(error);
-      alert("이름 추천 실패");
+      console.error("이름 추천 실패", error);
+Alert.alert("추천 실패", "이름 추천을 불러오지 못했어요.");
     } finally {
       setIsNameLoading(false);
     }
@@ -385,15 +404,21 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>FREE FORTUNE</Text>
-          </View>
+  <View style={styles.heroBadge}>
+    <Text style={styles.heroBadgeText}>FREE FORTUNE</Text>
+  </View>
 
-          <Text style={styles.heroTitle}>무료운세 🐾</Text>
-          <Text style={styles.heroSubtitle}>
-            등록된 우리 아이 카드를 눌러 오늘의 운세를 확인해보세요.
-          </Text>
-        </View>
+  {isPremium && (
+    <View style={styles.premiumBadgeWrap}>
+      <PremiumBadge label="광고 제거 적용" />
+    </View>
+  )}
+
+  <Text style={styles.heroTitle}>무료운세 🐾</Text>
+  <Text style={styles.heroSubtitle}>
+    등록된 우리 아이 카드를 눌러 오늘의 운세를 확인해보세요.
+  </Text>
+</View>
 
         <SectionCard>
           <View style={styles.sectionHeader}>
@@ -1134,5 +1159,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     color: COLORS.secondary,
+  },
+  premiumBadgeWrap: {
+    marginBottom: 10,
   },
 });

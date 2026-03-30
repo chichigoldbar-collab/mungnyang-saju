@@ -468,7 +468,7 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-  container: { padding: 20, gap: 16, paddingBottom: 40 },
+  container: { padding: 20, gap: 16, paddingBottom: 44 },
 
   heroCard: { backgroundColor: COLORS.primary, borderRadius: 26, padding: 22 },
   heroBadge: {

@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,10 +13,12 @@ import {
 } from "react-native";
 
 import AppButton from "../components/AppButton";
+import PremiumBadge from "../components/PremiumBadge";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
 import { saveHistoryItem } from "../utils/historyStorage";
+import { isPremiumUser } from "../utils/premiumAccess";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
@@ -65,6 +67,8 @@ function wait(ms: number) {
 }
 
 export default function NamingScreen() {
+  const [isPremium, setIsPremium] = useState(false);
+
   const [savedPets, setSavedPets] = useState<SavedPetProfile[]>([]);
   const [selectedPetId, setSelectedPetId] = useState("");
   const [isLoadingPets, setIsLoadingPets] = useState(true);
@@ -147,11 +151,34 @@ export default function NamingScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadSavedPets();
+      const load = async () => {
+        await loadSavedPets();
+        const premium = await isPremiumUser();
+        setIsPremium(premium);
+      };
+
+      load();
     }, [loadSavedPets])
   );
 
   const handleAnalyzeNaming = async () => {
+    const premium = await isPremiumUser();
+
+    if (!premium) {
+      Alert.alert(
+        "프리미엄 전용 기능",
+        "작명 풀이는 프리미엄 기능입니다.\n프리미엄을 열면 광고 없이 바로 이용할 수 있어요.",
+        [
+          { text: "취소", style: "cancel" },
+          {
+            text: "프리미엄 보기",
+            onPress: () => router.push("/(tabs)/premium"),
+          },
+        ]
+      );
+      return;
+    }
+
     if (!selectedPet) {
       Alert.alert("선택 필요", "등록된 반려동물을 먼저 선택해주세요.");
       return;
@@ -211,6 +238,12 @@ export default function NamingScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <View style={styles.header}>
+        {isPremium && (
+          <View style={styles.premiumBadgeWrap}>
+            <PremiumBadge />
+          </View>
+        )}
+
         <Text style={styles.headerTitle}>✍️ 작명 풀이</Text>
         <Text style={styles.headerSub}>
           등록된 반려동물을 선택하고 이름이 가진 울림과 기운을 깊게 살펴봐요.
@@ -348,11 +381,14 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 44,
+    paddingBottom: 120,
     gap: 16,
   },
   header: {
     marginBottom: 4,
+  },
+  premiumBadgeWrap: {
+    marginBottom: 10,
   },
   headerTitle: {
     fontSize: 26,
