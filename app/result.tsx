@@ -4,13 +4,14 @@ import * as Sharing from "expo-sharing";
 import { useRef } from "react";
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
 
@@ -30,6 +31,7 @@ export default function ResultScreen() {
   const breed = String(params.breed ?? "품종 미입력");
   const birthDate = String(params.birthDate ?? "생일 미입력");
   const birthTime = String(params.birthTime ?? "시간 모름");
+  const photoUri = String(params.photoUri ?? "");
 
   const summary = String(
     params.summary ?? `${petName}의 오늘 운세가 생성되었어요.`
@@ -43,6 +45,11 @@ export default function ResultScreen() {
   const recommendedAction = String(
     params.recommendedAction ?? "오늘은 짧고 기분 좋은 놀이를 해보세요."
   );
+
+  const petEmoji = petType === "cat" ? "🐱" : "🐶";
+  const petTypeLabel = petType === "cat" ? "고양이" : "강아지";
+  const genderLabel = petGender === "female" ? "여아" : "남아";
+  const neuteredLabel = isNeutered === "true" ? "중성화 완료" : "중성화 미완료";
 
   const shareText = `[${petName}의 오늘 운세]
 ${summary}
@@ -143,6 +150,7 @@ ${recommendedAction}`;
         breed,
         birthDate,
         birthTime,
+        photoUri,
       },
     });
   };
@@ -159,6 +167,7 @@ ${recommendedAction}`;
         breed,
         birthDate,
         birthTime,
+        photoUri,
       },
     });
   };
@@ -179,20 +188,48 @@ ${recommendedAction}`;
 
         <SectionCard>
           <View style={styles.todayFortuneCard}>
-            <View style={styles.todayTopRow}>
-              <View>
-                <Text style={styles.todayLabel}>TODAY FORTUNE</Text>
-                <Text style={styles.petName}>{petName}</Text>
-              </View>
+            <View style={styles.todayHeaderRow}>
+              {photoUri ? (
+                <Image source={{ uri: photoUri }} style={styles.petPhoto} />
+              ) : (
+                <View style={styles.petPhotoFallback}>
+                  <Text style={styles.petPhotoFallbackText}>{petEmoji}</Text>
+                </View>
+              )}
 
-              <View style={styles.petBadge}>
-                <Text style={styles.petBadgeText}>
-                  {petType === "cat" ? "🐱 고양이" : "🐶 강아지"}
-                </Text>
+              <View style={styles.todayHeaderTextWrap}>
+                <View style={styles.todayTopRow}>
+                  <View style={styles.titleWrap}>
+                    <Text style={styles.todayLabel}>TODAY FORTUNE</Text>
+                    <Text style={styles.petName}>{petName}</Text>
+                  </View>
+
+                  <View style={styles.petBadge}>
+                    <Text style={styles.petBadgeText}>
+                      {petEmoji} {petTypeLabel}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.metaChipWrap}>
+                  <View style={styles.metaChip}>
+                    <Text style={styles.metaChipText}>{genderLabel}</Text>
+                  </View>
+                  <View style={styles.metaChip}>
+                    <Text style={styles.metaChipText}>{neuteredLabel}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.petMeta}>{breed}</Text>
+                <Text style={styles.petMeta}>생일 · {birthDate}</Text>
+                <Text style={styles.petMeta}>시간 · {birthTime}</Text>
               </View>
             </View>
 
-            <Text style={styles.todaySummary}>{summary}</Text>
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryTitle}>오늘의 한줄 요약</Text>
+              <Text style={styles.todaySummary}>{summary}</Text>
+            </View>
           </View>
         </SectionCard>
 
@@ -299,7 +336,7 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     gap: 16,
-    paddingBottom: 44,
+    paddingBottom: 120,
   },
   header: {
     marginBottom: 4,
@@ -319,11 +356,38 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 18,
   },
+  todayHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  petPhoto: {
+    width: 82,
+    height: 82,
+    borderRadius: 24,
+  },
+  petPhotoFallback: {
+    width: 82,
+    height: 82,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  petPhotoFallbackText: {
+    fontSize: 36,
+  },
+  todayHeaderTextWrap: {
+    flex: 1,
+  },
   todayTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 10,
+  },
+  titleWrap: {
+    flex: 1,
   },
   todayLabel: {
     fontSize: 11,
@@ -348,8 +412,43 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: COLORS.text,
   },
-  todaySummary: {
+  metaChipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  metaChip: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metaChipText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: COLORS.secondary,
+  },
+  petMeta: {
+    marginTop: 6,
+    fontSize: 13,
+    color: COLORS.subText,
+    lineHeight: 18,
+  },
+  summaryBox: {
     marginTop: 16,
+    backgroundColor: "#FFFDFB",
+    borderRadius: 16,
+    padding: 14,
+  },
+  summaryTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: COLORS.secondary,
+    marginBottom: 8,
+  },
+  todaySummary: {
     fontSize: 15,
     lineHeight: 24,
     color: COLORS.text,

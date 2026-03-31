@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -12,14 +13,14 @@ import {
   Text,
   View,
 } from "react-native";
-import PremiumBadge from "../components/PremiumBadge";
-import { isPremiumUser } from "../utils/premiumAccess";
 
 import AppButton from "../components/AppButton";
+import PremiumBadge from "../components/PremiumBadge";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
 import { preloadInterstitialAd, showInterstitialAd } from "../utils/ads";
+import { isPremiumUser } from "../utils/premiumAccess";
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const CURRENT_PET_KEY = "mungnyang-current-pet";
@@ -36,6 +37,7 @@ type SavedPetProfile = {
   birthDate: string;
   birthTime: string;
   isBirthTimeKnown: boolean;
+  photoUri?: string;
 };
 
 type DailyFortuneCacheItem = {
@@ -58,13 +60,7 @@ type DailyFortuneCacheItem = {
   recommendedAction: string;
 };
 
-type NameStyle =
-  | "cute"
-  | "soft"
-  | "luxury"
-  | "trendy"
-  | "unique";
-
+type NameStyle = "cute" | "soft" | "luxury" | "trendy" | "unique";
 type NameKind = "animation" | "art" | "myth" | "meaning";
 
 type RecommendedNameItem = {
@@ -105,8 +101,6 @@ function getTodayKey() {
 }
 
 function getApiBaseUrl() {
-
-
   if (Platform.OS === "android") {
     return "http://10.0.2.2:4000";
   }
@@ -137,7 +131,9 @@ export default function HomeScreen() {
   const [selectedKind, setSelectedKind] = useState<NameKind>("animation");
   const [selectedStyle, setSelectedStyle] = useState<NameStyle>("cute");
   const [isNameLoading, setIsNameLoading] = useState(false);
-  const [recommendations, setRecommendations] = useState<RecommendedNameItem[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendedNameItem[]>(
+    []
+  );
 
   const loadSavedData = useCallback(async () => {
     try {
@@ -178,7 +174,7 @@ export default function HomeScreen() {
         setIsPremium(premium);
         preloadInterstitialAd();
       };
-  
+
       load();
     }, [loadSavedData])
   );
@@ -220,6 +216,7 @@ export default function HomeScreen() {
           luckyColor: todayFortune.luckyColor,
           luckyItem: todayFortune.luckyItem,
           recommendedAction: todayFortune.recommendedAction,
+          photoUri: pet.photoUri ?? "",
         },
       });
       return;
@@ -236,6 +233,7 @@ export default function HomeScreen() {
         breed: pet.breed,
         birthDate: pet.birthDate,
         birthTime: pet.birthTime,
+        photoUri: pet.photoUri ?? "",
       },
     });
   };
@@ -327,14 +325,6 @@ export default function HomeScreen() {
       pathname: "/(tabs)/register",
       params: {
         editId: pet.id,
-        petName: pet.petName,
-        petType: pet.petType,
-        petGender: pet.petGender,
-        isNeutered: pet.isNeutered ? "true" : "false",
-        breed: pet.breed,
-        birthDate: pet.birthDate,
-        birthTime: pet.birthTime,
-        isBirthTimeKnown: pet.isBirthTimeKnown ? "true" : "false",
       },
     });
   };
@@ -342,15 +332,15 @@ export default function HomeScreen() {
   const handleRecommendNames = async () => {
     try {
       setIsNameLoading(true);
-  
+
       const isFirstRecommend = recommendations.length === 0;
       setRecommendations([]);
-  
+
       if (isFirstRecommend) {
         await showInterstitialAd();
         preloadInterstitialAd();
       }
-  
+
       const [response] = await Promise.all([
         fetch(`${getApiBaseUrl()}/api/names/recommend`, {
           method: "POST",
@@ -367,17 +357,17 @@ export default function HomeScreen() {
         }),
         wait(2300),
       ]);
-  
-      const json = await response.json();
-  
+
+      const json = (await response.json()) as NameRecommendApiResponse;
+
       if (!response.ok || !json.success || !json.data) {
         throw new Error(json.message ?? "이름 추천 실패");
       }
-  
+
       setRecommendations(json.data);
     } catch (error) {
       console.error("이름 추천 실패", error);
-Alert.alert("추천 실패", "이름 추천을 불러오지 못했어요.");
+      Alert.alert("추천 실패", "이름 추천을 불러오지 못했어요.");
     } finally {
       setIsNameLoading(false);
     }
@@ -404,21 +394,21 @@ Alert.alert("추천 실패", "이름 추천을 불러오지 못했어요.");
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
-  <View style={styles.heroBadge}>
-    <Text style={styles.heroBadgeText}>FREE FORTUNE</Text>
-  </View>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>FREE FORTUNE</Text>
+          </View>
 
-  {isPremium && (
-    <View style={styles.premiumBadgeWrap}>
-      <PremiumBadge label="광고 제거 적용" />
-    </View>
-  )}
+          {isPremium && (
+            <View style={styles.premiumBadgeWrap}>
+              <PremiumBadge label="광고 제거 적용" />
+            </View>
+          )}
 
-  <Text style={styles.heroTitle}>무료운세 🐾</Text>
-  <Text style={styles.heroSubtitle}>
-    등록된 우리 아이 카드를 눌러 오늘의 운세를 확인해보세요.
-  </Text>
-</View>
+          <Text style={styles.heroTitle}>무료운세 🐾</Text>
+          <Text style={styles.heroSubtitle}>
+            등록된 우리 아이 카드를 눌러 오늘의 운세를 확인해보세요.
+          </Text>
+        </View>
 
         <SectionCard>
           <View style={styles.sectionHeader}>
@@ -461,25 +451,40 @@ Alert.alert("추천 실패", "이름 추천을 불러오지 못했어요.");
                       ]}
                       onPress={() => handleSelectSavedPet(pet)}
                     >
-                      <View style={styles.savedPetTopRow}>
-                        <Text style={styles.savedPetName}>
-                          {emoji} {pet.petName}
-                        </Text>
+                      <View style={styles.savedPetHeaderRow}>
+                        {pet.photoUri ? (
+                          <Image
+                            source={{ uri: pet.photoUri }}
+                            style={styles.petThumb}
+                          />
+                        ) : (
+                          <View style={styles.petThumbFallback}>
+                            <Text style={styles.petThumbFallbackText}>{emoji}</Text>
+                          </View>
+                        )}
 
-                        <View style={styles.savedPetTypeBadge}>
-                          <Text style={styles.savedPetTypeBadgeText}>
-                            {typeLabel}
+                        <View style={styles.savedPetHeaderTextWrap}>
+                          <View style={styles.savedPetTopRow}>
+                            <Text style={styles.savedPetName}>
+                              {emoji} {pet.petName}
+                            </Text>
+
+                            <View style={styles.savedPetTypeBadge}>
+                              <Text style={styles.savedPetTypeBadgeText}>
+                                {typeLabel}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <Text style={styles.savedPetMeta}>{pet.breed}</Text>
+                          <Text style={styles.savedPetMeta}>
+                            생일 · {pet.birthDate}
+                          </Text>
+                          <Text style={styles.savedPetMeta}>
+                            시간 · {pet.birthTime}
                           </Text>
                         </View>
                       </View>
-
-                      <Text style={styles.savedPetMeta}>{pet.breed}</Text>
-                      <Text style={styles.savedPetMeta}>
-                        생일 · {pet.birthDate}
-                      </Text>
-                      <Text style={styles.savedPetMeta}>
-                        시간 · {pet.birthTime}
-                      </Text>
 
                       <View style={styles.fortuneStatusRow}>
                         <View
@@ -712,7 +717,9 @@ Alert.alert("추천 실패", "이름 추천을 불러오지 못했어요.");
 
               <View style={styles.nameRecommendButtonWrap}>
                 <AppButton
-                  title={recommendations.length > 0 ? "다시 추천받기" : "이름 추천받기"}
+                  title={
+                    recommendations.length > 0 ? "다시 추천받기" : "이름 추천받기"
+                  }
                   onPress={handleRecommendNames}
                   variant="secondary"
                 />
@@ -784,7 +791,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 44,
+    paddingBottom: 120,
     gap: 16,
   },
   heroCard: {
@@ -804,6 +811,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     color: COLORS.primary,
+  },
+  premiumBadgeWrap: {
+    marginBottom: 10,
   },
   heroTitle: {
     fontSize: 28,
@@ -861,6 +871,30 @@ const styles = StyleSheet.create({
   },
   savedPetMainDone: {
     backgroundColor: "#FFF8F0",
+  },
+  savedPetHeaderRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  petThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+  },
+  petThumbFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: "#F7F2ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  petThumbFallbackText: {
+    fontSize: 28,
+  },
+  savedPetHeaderTextWrap: {
+    flex: 1,
   },
   savedPetTopRow: {
     flexDirection: "row",
@@ -1159,8 +1193,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     color: COLORS.secondary,
-  },
-  premiumBadgeWrap: {
-    marginBottom: 10,
   },
 });

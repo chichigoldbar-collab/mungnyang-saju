@@ -12,7 +12,7 @@ import {
 
 import { COLORS } from "../constants/colors";
 import type { PetGender, PetType } from "../types";
-import { showInterstitialAd } from "../utils/ads";
+import { preloadInterstitialAd, showInterstitialAd } from "../utils/ads";
 
 const DAILY_FORTUNE_CACHE_KEY = "mungnyang-daily-fortune-cache";
 const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
@@ -128,6 +128,7 @@ export default function LoadingScreen() {
   const breed = String(params.breed ?? "품종 미입력");
   const birthDate = String(params.birthDate ?? "2024-01-01");
   const birthTime = String(params.birthTime ?? "시간 모름");
+  const photoUri = String(params.photoUri ?? "");
 
   const loadingMessages = useMemo(
     () => [
@@ -163,26 +164,27 @@ export default function LoadingScreen() {
     const fetchDailyFortune = async () => {
       try {
         await showInterstitialAd();
+        preloadInterstitialAd();
 
-const [response] = await Promise.all([
-  fetch(`${getApiBaseUrl()}/api/fortune/daily`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      petId,
-      petName,
-      petType,
-      petGender,
-      isNeutered,
-      breed,
-      birthDate,
-      birthTime,
-    }),
-  }),
-  wait(1200),
-]);
+        const [response] = await Promise.all([
+          fetch(`${getApiBaseUrl()}/api/fortune/daily`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              petId,
+              petName,
+              petType,
+              petGender,
+              isNeutered,
+              breed,
+              birthDate,
+              birthTime,
+            }),
+          }),
+          wait(1200),
+        ]);
 
         const json = (await response.json()) as FortuneApiResponse;
 
@@ -220,6 +222,7 @@ const [response] = await Promise.all([
           pathname: "/result",
           params: {
             petId: resultItem.petId,
+            dateKey: resultItem.dateKey,
             petName: resultItem.petName,
             petType: resultItem.petType,
             petGender: resultItem.petGender,
@@ -235,6 +238,7 @@ const [response] = await Promise.all([
             luckyColor: resultItem.luckyColor,
             luckyItem: resultItem.luckyItem,
             recommendedAction: resultItem.recommendedAction,
+            photoUri,
           },
         });
       } catch (error) {
@@ -255,12 +259,23 @@ const [response] = await Promise.all([
       }
     };
 
+    preloadInterstitialAd();
     fetchDailyFortune();
 
     return () => {
       isCancelled = true;
     };
-  }, [petId, petName, petType, petGender, isNeutered, breed, birthDate, birthTime]);
+  }, [
+    petId,
+    petName,
+    petType,
+    petGender,
+    isNeutered,
+    breed,
+    birthDate,
+    birthTime,
+    photoUri,
+  ]);
 
   return (
     <View style={styles.screen}>

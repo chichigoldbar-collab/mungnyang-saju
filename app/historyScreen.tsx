@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,7 @@ import {
 import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
-import type { SavedPetProfile } from "../types";
+import type { SavedPetProfile as BaseSavedPetProfile } from "../types";
 import {
   getHistoryItems,
   HISTORY_STORAGE_KEY,
@@ -21,6 +22,10 @@ import {
 
 const PET_STORAGE_KEY = "mungnyang-pet-profiles";
 const FORTUNE_HISTORY_KEY = "mungnyang-fortune-history";
+
+type SavedPetProfile = BaseSavedPetProfile & {
+  photoUri?: string;
+};
 
 type LegacyFortuneHistoryItem = {
   id?: string;
@@ -114,7 +119,7 @@ export default function HistoryScreen() {
       const petList = savedPetsRaw ? JSON.parse(savedPetsRaw) : [];
       const legacyFortuneList = legacyFortuneRaw ? JSON.parse(legacyFortuneRaw) : [];
 
-      const validPets = Array.isArray(petList) ? petList : [];
+      const validPets = Array.isArray(petList) ? (petList as SavedPetProfile[]) : [];
       const validLegacyFortune = Array.isArray(legacyFortuneList)
         ? (legacyFortuneList as LegacyFortuneHistoryItem[])
         : [];
@@ -264,15 +269,31 @@ export default function HistoryScreen() {
           {selectedPet && (
             <SectionCard>
               <Text style={styles.sectionTitle}>선택된 아이</Text>
-              <Text style={styles.petName}>
-                {getPetVisual(selectedPet.petType, selectedPet.breed)}{" "}
-                {selectedPet.petName}
-              </Text>
-              <Text style={styles.petMeta}>
-                {selectedPet.petType === "cat" ? "고양이" : "강아지"} ·{" "}
-                {selectedPet.breed}
-              </Text>
-              <Text style={styles.subText}>생일: {selectedPet.birthDate}</Text>
+
+              <View style={styles.selectedPetRow}>
+                {selectedPet.photoUri ? (
+                  <Image
+                    source={{ uri: selectedPet.photoUri }}
+                    style={styles.petPhoto}
+                  />
+                ) : (
+                  <View style={styles.petPhotoFallback}>
+                    <Text style={styles.petPhotoFallbackText}>
+                      {getPetVisual(selectedPet.petType, selectedPet.breed)}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.selectedPetInfo}>
+                  <Text style={styles.petName}>{selectedPet.petName}</Text>
+                  <Text style={styles.petMeta}>
+                    {selectedPet.petType === "cat" ? "고양이" : "강아지"} ·{" "}
+                    {selectedPet.breed}
+                  </Text>
+                  <Text style={styles.subText}>생일: {selectedPet.birthDate}</Text>
+                  <Text style={styles.subText}>시간: {selectedPet.birthTime}</Text>
+                </View>
+              </View>
             </SectionCard>
           )}
 
@@ -468,7 +489,7 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-  container: { padding: 20, gap: 16, paddingBottom: 44 },
+  container: { padding: 20, gap: 16, paddingBottom: 120 },
 
   heroCard: { backgroundColor: COLORS.primary, borderRadius: 26, padding: 22 },
   heroBadge: {
@@ -519,6 +540,30 @@ const styles = StyleSheet.create({
   petChipText: { fontSize: 14, fontWeight: "700", color: "#6B625C" },
   petChipTextActive: { color: COLORS.text },
 
+  selectedPetRow: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "flex-start",
+  },
+  petPhoto: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+  },
+  petPhotoFallback: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    backgroundColor: "#F7F2ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  petPhotoFallbackText: {
+    fontSize: 32,
+  },
+  selectedPetInfo: {
+    flex: 1,
+  },
   petName: { fontSize: 20, fontWeight: "700", color: COLORS.text },
   petMeta: { marginTop: 4, color: COLORS.subText },
   subText: { marginTop: 6, fontSize: 13, color: COLORS.muted },

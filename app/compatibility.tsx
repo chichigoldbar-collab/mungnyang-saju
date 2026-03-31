@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -37,6 +38,7 @@ type SavedPetProfile = {
   birthDate: string;
   birthTime: string;
   isBirthTimeKnown: boolean;
+  photoUri?: string;
 };
 
 type CompatibilityResultData = {
@@ -525,14 +527,33 @@ export default function CompatibilityScreen() {
 
           {selectedPet && (
             <View style={styles.selectedPetCard}>
-              <Text style={styles.selectedPetTitle}>
-                {selectedPet.petType === "cat" ? "🐱" : "🐶"}{" "}
-                {selectedPet.petName}
-              </Text>
-              <Text style={styles.selectedPetMeta}>{selectedPet.breed}</Text>
-              <Text style={styles.selectedPetMeta}>
-                생일 · {selectedPet.birthDate}
-              </Text>
+              <View style={styles.selectedPetRow}>
+                {selectedPet.photoUri ? (
+                  <Image
+                    source={{ uri: selectedPet.photoUri }}
+                    style={styles.petPhoto}
+                  />
+                ) : (
+                  <View style={styles.petPhotoFallback}>
+                    <Text style={styles.petPhotoFallbackText}>
+                      {selectedPet.petType === "cat" ? "🐱" : "🐶"}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.selectedPetInfo}>
+                  <Text style={styles.selectedPetTitle}>
+                    {selectedPet.petName}
+                  </Text>
+                  <Text style={styles.selectedPetMeta}>{selectedPet.breed}</Text>
+                  <Text style={styles.selectedPetMeta}>
+                    생일 · {selectedPet.birthDate}
+                  </Text>
+                  <Text style={styles.selectedPetMeta}>
+                    시간 · {selectedPet.birthTime}
+                  </Text>
+                </View>
+              </View>
             </View>
           )}
         </SectionCard>
@@ -740,6 +761,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF8F0",
     borderRadius: 18,
     padding: 14,
+  },
+  selectedPetRow: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "flex-start",
+  },
+  petPhoto: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+  },
+  petPhotoFallback: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    backgroundColor: "#F7F2ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  petPhotoFallbackText: {
+    fontSize: 32,
+  },
+  selectedPetInfo: {
+    flex: 1,
   },
   selectedPetTitle: {
     fontSize: 18,

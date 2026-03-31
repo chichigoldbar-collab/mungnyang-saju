@@ -1,7 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -29,6 +32,7 @@ type SavedPetProfile = {
   birthDate: string;
   birthTime: string;
   isBirthTimeKnown: boolean;
+  photoUri?: string;
 };
 
 const DOG_BREEDS = [
@@ -97,7 +101,7 @@ const currentYear = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 31 }, (_, i) => currentYear - i);
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i);
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i + 1).map((v) => v - 1);
 
 function getDaysInMonth(year?: number, month?: number) {
   if (!year || !month) return [];
@@ -180,7 +184,7 @@ function SelectorModal({
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+      <View style={styles.modalOverlay} pointerEvents={visible ? "auto" : "none"}>
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>{title}</Text>
 
@@ -222,9 +226,7 @@ function SelectorModal({
 
 export default function RegisterScreen() {
   const params = useLocalSearchParams();
-
   const editId = String(params.editId ?? "");
-  const didInitEditRef = useRef(false);
 
   const [petName, setPetName] = useState("");
   const [customBreedInput, setCustomBreedInput] = useState("");
@@ -233,6 +235,7 @@ export default function RegisterScreen() {
   const [selectedGender, setSelectedGender] = useState<PetGender>("male");
   const [isNeutered, setIsNeutered] = useState(false);
   const [isBirthTimeKnown, setIsBirthTimeKnown] = useState(false);
+  const [photoUri, setPhotoUri] = useState("");
 
   const [birthYear, setBirthYear] = useState<number | undefined>(undefined);
   const [birthMonth, setBirthMonth] = useState<number | undefined>(undefined);
@@ -248,48 +251,79 @@ export default function RegisterScreen() {
     [birthYear, birthMonth]
   );
 
-  useEffect(() => {
-    if (!editId) return;
-    if (didInitEditRef.current) return;
-  
-    const editPetName = String(params.petName ?? "");
-    if (!editPetName) return;
-  
-    didInitEditRef.current = true;
-  
-    const nextType = String(params.petType ?? "dog") as PetType;
-    const breed = String(params.breed ?? "");
-    const options = getBreedOptions(nextType);
-  
-    setPetName(editPetName);
-    setSelectedType(nextType);
-    setSelectedGender(String(params.petGender ?? "male") as PetGender);
-    setIsNeutered(String(params.isNeutered ?? "false") === "true");
-  
-    if (options.includes(breed)) {
-      setSelectedBreed(breed);
-      setCustomBreedInput("");
-    } else {
-      setSelectedBreed("직접 입력");
-      setCustomBreedInput(
-        breed === "견종 미입력" || breed === "묘종 미입력" ? "" : breed
-      );
-    }
-  
-    const birthDate = String(params.birthDate ?? "");
-    const birthTime = String(params.birthTime ?? "");
-    const dateParts = parseBirthDateToParts(birthDate);
-    const timeParts = parseBirthTimeToParts(birthTime);
-  
-    setBirthYear(dateParts.year);
-    setBirthMonth(dateParts.month);
-    setBirthDay(dateParts.day);
-    setBirthHour(timeParts.hour);
-    setBirthMinute(timeParts.minute);
-  
-    setIsBirthTimeKnown(String(params.isBirthTimeKnown ?? "false") === "true");
-  }, [editId]);
+  const resetForm = () => {
+    setPetName("");
+    setCustomBreedInput("");
+    setSelectedBreed("");
+    setSelectedType("dog");
+    setSelectedGender("male");
+    setIsNeutered(false);
+    setIsBirthTimeKnown(false);
+    setPhotoUri("");
+    setBirthYear(undefined);
+    setBirthMonth(undefined);
+    setBirthDay(undefined);
+    setBirthHour(undefined);
+    setBirthMinute(undefined);
+  };
 
+  useEffect(() => {
+    const loadEditPet = async () => {
+      if (!editId) {
+        resetForm();
+        return;
+      }
+
+      try {
+        const savedRaw = await AsyncStorage.getItem(PET_STORAGE_KEY);
+        const parsed: SavedPetProfile[] = savedRaw ? JSON.parse(savedRaw) : [];
+        const pets = Array.isArray(parsed) ? parsed : [];
+
+        const targetPet = pets.find((pet) => pet.id === editId);
+
+        if (!targetPet) {
+          resetForm();
+          return;
+        }
+
+        const nextType = targetPet.petType;
+        const breed = targetPet.breed;
+        const options = getBreedOptions(nextType);
+
+        setPetName(targetPet.petName);
+        setSelectedType(nextType);
+        setSelectedGender(targetPet.petGender);
+        setIsNeutered(targetPet.isNeutered);
+        setPhotoUri(targetPet.photoUri ?? "");
+
+        if (options.includes(breed)) {
+          setSelectedBreed(breed);
+          setCustomBreedInput("");
+        } else {
+          setSelectedBreed("직접 입력");
+          setCustomBreedInput(
+            breed === "견종 미입력" || breed === "묘종 미입력" ? "" : breed
+          );
+        }
+
+        const dateParts = parseBirthDateToParts(targetPet.birthDate);
+        const timeParts = parseBirthTimeToParts(targetPet.birthTime);
+
+        setBirthYear(dateParts.year);
+        setBirthMonth(dateParts.month);
+        setBirthDay(dateParts.day);
+        setBirthHour(timeParts.hour);
+        setBirthMinute(timeParts.minute);
+
+        setIsBirthTimeKnown(targetPet.isBirthTimeKnown);
+      } catch (error) {
+        console.error("수정할 반려동물 정보 불러오기 실패", error);
+        resetForm();
+      }
+    };
+
+    loadEditPet();
+  }, [editId]);
 
   useEffect(() => {
     const options = getBreedOptions(selectedType);
@@ -308,6 +342,35 @@ export default function RegisterScreen() {
     }
   }, [birthYear, birthMonth, birthDay]);
 
+  const handlePickPetPhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert("권한 필요", "사진첩에서 이미지를 불러오려면 권한이 필요해요.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.length > 0) {
+        setPhotoUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("사진 선택 실패", error);
+      Alert.alert("오류", "사진을 불러오지 못했어요.");
+    }
+  };
+
+  const handleClearPetPhoto = () => {
+    setPhotoUri("");
+  };
+
   const getFinalBreed = () => {
     if (selectedBreed === "직접 입력") {
       return (
@@ -323,9 +386,25 @@ export default function RegisterScreen() {
   };
 
   const handleSaveAndGoFortune = async () => {
-    if (!petName.trim()) return;
-    if (!selectedBreed) return;
-    if (selectedBreed === "직접 입력" && !customBreedInput.trim()) return;
+    if (!petName.trim()) {
+      Alert.alert("입력 필요", "반려동물 이름을 입력해주세요.");
+      return;
+    }
+
+    if (!selectedBreed) {
+      Alert.alert("선택 필요", "품종을 선택해주세요.");
+      return;
+    }
+
+    if (selectedBreed === "직접 입력" && !customBreedInput.trim()) {
+      Alert.alert(
+        "입력 필요",
+        selectedType === "dog"
+          ? "견종을 직접 입력해주세요."
+          : "묘종을 직접 입력해주세요."
+      );
+      return;
+    }
 
     const finalBreed = getFinalBreed();
     const finalBirthDate = formatBirthDate(birthYear, birthMonth, birthDay);
@@ -343,6 +422,7 @@ export default function RegisterScreen() {
       birthDate: finalBirthDate,
       birthTime: finalBirthTime,
       isBirthTimeKnown,
+      photoUri,
     };
 
     try {
@@ -377,10 +457,12 @@ export default function RegisterScreen() {
           breed: payload.breed,
           birthDate: payload.birthDate,
           birthTime: payload.birthTime,
+          photoUri: payload.photoUri ?? "",
         },
       });
     } catch (error) {
       console.error("반려동물 저장 실패", error);
+      Alert.alert("저장 실패", "반려동물 정보를 저장하지 못했어요.");
     }
   };
 
@@ -416,6 +498,44 @@ export default function RegisterScreen() {
         </View>
 
         <SectionCard>
+          <Text style={styles.label}>아이 사진</Text>
+
+          <View style={styles.photoRow}>
+            <Pressable style={styles.photoPickerButton} onPress={handlePickPetPhoto}>
+              {photoUri ? (
+                <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <Text style={styles.photoPlaceholderEmoji}>
+                    {selectedType === "cat" ? "🐱" : "🐶"}
+                  </Text>
+                  <Text style={styles.photoPickerText}>사진 선택하기</Text>
+                </View>
+              )}
+            </Pressable>
+
+            <View style={styles.photoActionColumn}>
+              <AppButton
+                title={photoUri ? "사진 바꾸기" : "사진 불러오기"}
+                onPress={handlePickPetPhoto}
+                variant="secondary"
+              />
+              {photoUri ? (
+                <View style={styles.photoRemoveWrap}>
+                  <AppButton
+                    title="사진 삭제"
+                    onPress={handleClearPetPhoto}
+                    variant="outline"
+                  />
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          <Text style={styles.photoHint}>
+            사진은 아이 카드에서 함께 보여집니다.
+          </Text>
+
           <Text style={styles.label}>이름</Text>
           <TextInput
             value={petName}
@@ -428,19 +548,35 @@ export default function RegisterScreen() {
           <Text style={styles.label}>종류</Text>
           <View style={styles.row}>
             <Pressable
-              style={[styles.choiceButton, selectedType === "dog" && styles.choiceButtonActive]}
+              style={[
+                styles.choiceButton,
+                selectedType === "dog" && styles.choiceButtonActive,
+              ]}
               onPress={() => setSelectedType("dog")}
             >
-              <Text style={[styles.choiceText, selectedType === "dog" && styles.choiceTextActive]}>
+              <Text
+                style={[
+                  styles.choiceText,
+                  selectedType === "dog" && styles.choiceTextActive,
+                ]}
+              >
                 🐶 강아지
               </Text>
             </Pressable>
 
             <Pressable
-              style={[styles.choiceButton, selectedType === "cat" && styles.choiceButtonActive]}
+              style={[
+                styles.choiceButton,
+                selectedType === "cat" && styles.choiceButtonActive,
+              ]}
               onPress={() => setSelectedType("cat")}
             >
-              <Text style={[styles.choiceText, selectedType === "cat" && styles.choiceTextActive]}>
+              <Text
+                style={[
+                  styles.choiceText,
+                  selectedType === "cat" && styles.choiceTextActive,
+                ]}
+              >
                 🐱 고양이
               </Text>
             </Pressable>
@@ -449,19 +585,35 @@ export default function RegisterScreen() {
           <Text style={styles.label}>성별</Text>
           <View style={styles.row}>
             <Pressable
-              style={[styles.choiceButton, selectedGender === "male" && styles.choiceButtonActive]}
+              style={[
+                styles.choiceButton,
+                selectedGender === "male" && styles.choiceButtonActive,
+              ]}
               onPress={() => setSelectedGender("male")}
             >
-              <Text style={[styles.choiceText, selectedGender === "male" && styles.choiceTextActive]}>
+              <Text
+                style={[
+                  styles.choiceText,
+                  selectedGender === "male" && styles.choiceTextActive,
+                ]}
+              >
                 남아
               </Text>
             </Pressable>
 
             <Pressable
-              style={[styles.choiceButton, selectedGender === "female" && styles.choiceButtonActive]}
+              style={[
+                styles.choiceButton,
+                selectedGender === "female" && styles.choiceButtonActive,
+              ]}
               onPress={() => setSelectedGender("female")}
             >
-              <Text style={[styles.choiceText, selectedGender === "female" && styles.choiceTextActive]}>
+              <Text
+                style={[
+                  styles.choiceText,
+                  selectedGender === "female" && styles.choiceTextActive,
+                ]}
+              >
                 여아
               </Text>
             </Pressable>
@@ -470,19 +622,35 @@ export default function RegisterScreen() {
           <Text style={styles.label}>중성화 여부</Text>
           <View style={styles.row}>
             <Pressable
-              style={[styles.choiceButton, !isNeutered && styles.choiceButtonActive]}
+              style={[
+                styles.choiceButton,
+                !isNeutered && styles.choiceButtonActive,
+              ]}
               onPress={() => setIsNeutered(false)}
             >
-              <Text style={[styles.choiceText, !isNeutered && styles.choiceTextActive]}>
+              <Text
+                style={[
+                  styles.choiceText,
+                  !isNeutered && styles.choiceTextActive,
+                ]}
+              >
                 미완료
               </Text>
             </Pressable>
 
             <Pressable
-              style={[styles.choiceButton, isNeutered && styles.choiceButtonActive]}
+              style={[
+                styles.choiceButton,
+                isNeutered && styles.choiceButtonActive,
+              ]}
               onPress={() => setIsNeutered(true)}
             >
-              <Text style={[styles.choiceText, isNeutered && styles.choiceTextActive]}>
+              <Text
+                style={[
+                  styles.choiceText,
+                  isNeutered && styles.choiceTextActive,
+                ]}
+              >
                 완료
               </Text>
             </Pressable>
@@ -502,7 +670,11 @@ export default function RegisterScreen() {
             <TextInput
               value={customBreedInput}
               onChangeText={setCustomBreedInput}
-              placeholder={selectedType === "dog" ? "견종을 직접 입력하세요" : "묘종을 직접 입력하세요"}
+              placeholder={
+                selectedType === "dog"
+                  ? "견종을 직접 입력하세요"
+                  : "묘종을 직접 입력하세요"
+              }
               placeholderTextColor="#999"
               style={[styles.input, styles.extraInput]}
             />
@@ -511,19 +683,28 @@ export default function RegisterScreen() {
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>생년월일</Text>
             <View style={styles.birthRow}>
-              <Pressable style={styles.dateSelectButton} onPress={() => setSelectorType("year")}>
+              <Pressable
+                style={styles.dateSelectButton}
+                onPress={() => setSelectorType("year")}
+              >
                 <Text style={styles.dateSelectLabel}>
                   {birthYear ? `${birthYear}년` : "년 선택"}
                 </Text>
               </Pressable>
 
-              <Pressable style={styles.dateSelectButton} onPress={() => setSelectorType("month")}>
+              <Pressable
+                style={styles.dateSelectButton}
+                onPress={() => setSelectorType("month")}
+              >
                 <Text style={styles.dateSelectLabel}>
                   {birthMonth ? `${birthMonth}월` : "월 선택"}
                 </Text>
               </Pressable>
 
-              <Pressable style={styles.dateSelectButton} onPress={() => setSelectorType("day")}>
+              <Pressable
+                style={styles.dateSelectButton}
+                onPress={() => setSelectorType("day")}
+              >
                 <Text style={styles.dateSelectLabel}>
                   {birthDay ? `${birthDay}일` : "일 선택"}
                 </Text>
@@ -537,19 +718,35 @@ export default function RegisterScreen() {
             <Text style={styles.label}>태어난 시간</Text>
             <View style={styles.row}>
               <Pressable
-                style={[styles.choiceButton, isBirthTimeKnown && styles.choiceButtonActive]}
+                style={[
+                  styles.choiceButton,
+                  isBirthTimeKnown && styles.choiceButtonActive,
+                ]}
                 onPress={() => setIsBirthTimeKnown(true)}
               >
-                <Text style={[styles.choiceText, isBirthTimeKnown && styles.choiceTextActive]}>
+                <Text
+                  style={[
+                    styles.choiceText,
+                    isBirthTimeKnown && styles.choiceTextActive,
+                  ]}
+                >
                   알아요
                 </Text>
               </Pressable>
 
               <Pressable
-                style={[styles.choiceButton, !isBirthTimeKnown && styles.choiceButtonActive]}
+                style={[
+                  styles.choiceButton,
+                  !isBirthTimeKnown && styles.choiceButtonActive,
+                ]}
                 onPress={() => setIsBirthTimeKnown(false)}
               >
-                <Text style={[styles.choiceText, !isBirthTimeKnown && styles.choiceTextActive]}>
+                <Text
+                  style={[
+                    styles.choiceText,
+                    !isBirthTimeKnown && styles.choiceTextActive,
+                  ]}
+                >
                   몰라요
                 </Text>
               </Pressable>
@@ -558,7 +755,10 @@ export default function RegisterScreen() {
             {isBirthTimeKnown && (
               <>
                 <View style={styles.birthRow}>
-                  <Pressable style={styles.dateSelectButton} onPress={() => setSelectorType("hour")}>
+                  <Pressable
+                    style={styles.dateSelectButton}
+                    onPress={() => setSelectorType("hour")}
+                  >
                     <Text style={styles.dateSelectLabel}>
                       {birthHour !== undefined
                         ? `${String(birthHour).padStart(2, "0")}시`
@@ -566,7 +766,10 @@ export default function RegisterScreen() {
                     </Text>
                   </Pressable>
 
-                  <Pressable style={styles.dateSelectButton} onPress={() => setSelectorType("minute")}>
+                  <Pressable
+                    style={styles.dateSelectButton}
+                    onPress={() => setSelectorType("minute")}
+                  >
                     <Text style={styles.dateSelectLabel}>
                       {birthMinute !== undefined
                         ? `${String(birthMinute).padStart(2, "0")}분`
@@ -582,7 +785,10 @@ export default function RegisterScreen() {
 
           <View style={styles.formButtonRow}>
             <View style={styles.formButtonHalf}>
-              <AppButton title="저장 후 운세 보기" onPress={handleSaveAndGoFortune} />
+              <AppButton
+                title="저장 후 운세 보기"
+                onPress={handleSaveAndGoFortune}
+              />
             </View>
           </View>
         </SectionCard>
@@ -603,6 +809,7 @@ export default function RegisterScreen() {
         }}
         onClose={() => setSelectorType(null)}
       />
+
       <SelectorModal
         visible={selectorType === "year"}
         title="년 선택"
@@ -612,6 +819,7 @@ export default function RegisterScreen() {
         onClose={() => setSelectorType(null)}
         formatLabel={(value) => `${value}년`}
       />
+
       <SelectorModal
         visible={selectorType === "month"}
         title="월 선택"
@@ -621,6 +829,7 @@ export default function RegisterScreen() {
         onClose={() => setSelectorType(null)}
         formatLabel={(value) => `${value}월`}
       />
+
       <SelectorModal
         visible={selectorType === "day"}
         title="일 선택"
@@ -630,6 +839,7 @@ export default function RegisterScreen() {
         onClose={() => setSelectorType(null)}
         formatLabel={(value) => `${value}일`}
       />
+
       <SelectorModal
         visible={selectorType === "hour"}
         title="시 선택"
@@ -639,6 +849,7 @@ export default function RegisterScreen() {
         onClose={() => setSelectorType(null)}
         formatLabel={(value) => `${String(Number(value)).padStart(2, "0")}시`}
       />
+
       <SelectorModal
         visible={selectorType === "minute"}
         title="분 선택"
@@ -653,9 +864,20 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
-  container: { padding: 20, paddingBottom: 44, gap: 16 },
-  heroCard: { backgroundColor: COLORS.primary, borderRadius: 26, padding: 22 },
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  container: {
+    padding: 20,
+    paddingBottom: 120,
+    gap: 16,
+  },
+  heroCard: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 26,
+    padding: 22,
+  },
   heroBadge: {
     alignSelf: "flex-start",
     backgroundColor: COLORS.accentSoft,
@@ -664,15 +886,77 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginBottom: 12,
   },
-  heroBadgeText: { fontSize: 11, fontWeight: "800", color: COLORS.primary },
-  heroTitle: { fontSize: 28, fontWeight: "800", color: "#FFFFFF" },
-  heroSubtitle: { marginTop: 10, fontSize: 15, lineHeight: 24, color: "#F5ECE5" },
+  heroBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  heroSubtitle: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 24,
+    color: "#F5ECE5",
+  },
   label: {
     fontSize: 14,
     fontWeight: "700",
     color: "#4D4641",
     marginBottom: 8,
     marginTop: 10,
+  },
+  photoRow: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "center",
+  },
+  photoPickerButton: {
+    width: 116,
+    height: 116,
+    borderRadius: 20,
+    backgroundColor: "#F7F2ED",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    elevation: 2,
+  },
+  photoPreview: {
+    width: "100%",
+    height: "100%",
+  },
+  photoPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  photoPlaceholderEmoji: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  photoPickerText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6B625C",
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  photoActionColumn: {
+    flex: 1,
+    zIndex: 10,
+  },
+  photoRemoveWrap: {
+    marginTop: 10,
+  },
+  photoHint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: COLORS.muted,
+    lineHeight: 18,
   },
   input: {
     backgroundColor: "#F7F2ED",
@@ -682,9 +966,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
   },
-  extraInput: { marginTop: 10 },
-  fieldGroup: { marginTop: 4 },
-  row: { flexDirection: "row", gap: 10 },
+  extraInput: {
+    marginTop: 10,
+  },
+  fieldGroup: {
+    marginTop: 4,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
   choiceButton: {
     flex: 1,
     backgroundColor: "#F7F2ED",
@@ -692,9 +983,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  choiceButtonActive: { backgroundColor: COLORS.accent },
-  choiceText: { fontSize: 15, fontWeight: "700", color: "#6B625C" },
-  choiceTextActive: { color: COLORS.text },
+  choiceButtonActive: {
+    backgroundColor: COLORS.accent,
+  },
+  choiceText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#6B625C",
+  },
+  choiceTextActive: {
+    color: COLORS.text,
+  },
   selectButton: {
     backgroundColor: "#F7F2ED",
     borderRadius: 14,
@@ -707,7 +1006,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.text,
   },
-  birthRow: { flexDirection: "row", gap: 10 },
+  birthRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
   dateSelectButton: {
     flex: 1,
     backgroundColor: "#F7F2ED",
@@ -715,15 +1017,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  dateSelectLabel: { fontSize: 14, fontWeight: "700", color: COLORS.text },
+  dateSelectLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
   selectedDateText: {
     marginTop: 10,
     fontSize: 13,
     color: COLORS.muted,
     lineHeight: 18,
   },
-  formButtonRow: { flexDirection: "row", gap: 10, marginTop: 22 },
-  formButtonHalf: { flex: 1 },
+  formButtonRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 22,
+  },
+  formButtonHalf: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -742,7 +1054,9 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 12,
   },
-  modalList: { marginBottom: 14 },
+  modalList: {
+    marginBottom: 14,
+  },
   modalOptionButton: {
     backgroundColor: "#F7F2ED",
     borderRadius: 14,
@@ -750,7 +1064,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 8,
   },
-  modalOptionButtonActive: { backgroundColor: COLORS.accent },
-  modalOptionText: { fontSize: 15, fontWeight: "700", color: COLORS.text },
-  modalOptionTextActive: { color: COLORS.text },
+  modalOptionButtonActive: {
+    backgroundColor: COLORS.accent,
+  },
+  modalOptionText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  modalOptionTextActive: {
+    color: COLORS.text,
+  },
 });
