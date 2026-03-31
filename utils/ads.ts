@@ -1,31 +1,22 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   AdEventType,
+  BannerAdSize,
   InterstitialAd,
   TestIds,
 } from "react-native-google-mobile-ads";
-
-const PREMIUM_ACCESS_KEY = "mungnyang-premium-access";
+import { isPremiumUser } from "./premiumAccess";
 
 const interstitialUnitId = __DEV__
   ? TestIds.INTERSTITIAL
   : "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyyyyyy";
 
+const bannerUnitId = __DEV__
+  ? TestIds.BANNER
+  : "ca-app-pub-xxxxxxxxxxxxxxxx/zzzzzzzzzzzzzz";
+
 let interstitial: InterstitialAd | null = null;
-let isLoaded = false;
-
-async function isPremiumUser() {
-  try {
-    const raw = await AsyncStorage.getItem(PREMIUM_ACCESS_KEY);
-    if (!raw) return false;
-
-    const parsed = JSON.parse(raw);
-    return parsed?.allAccess === true;
-  } catch (error) {
-    console.error("프리미엄 상태 확인 실패", error);
-    return false;
-  }
-}
+let isInterstitialLoaded = false;
+let isInterstitialLoading = false;
 
 function createInterstitial() {
   const ad = InterstitialAd.createForAdRequest(interstitialUnitId, {
@@ -33,38 +24,60 @@ function createInterstitial() {
   });
 
   ad.addAdEventListener(AdEventType.LOADED, () => {
-    isLoaded = true;
-    console.log("Interstitial loaded");
+    isInterstitialLoaded = true;
+    isInterstitialLoading = false;
+    console.log("[ads] interstitial loaded");
   });
 
   ad.addAdEventListener(AdEventType.CLOSED, () => {
-    console.log("Interstitial closed");
-    isLoaded = false;
-    interstitial = createInterstitial();
-    interstitial.load();
+    console.log("[ads] interstitial closed");
+    isInterstitialLoaded = false;
+    isInterstitialLoading = false;
+    interstitial = null;
+    preloadInterstitialAd();
   });
 
   ad.addAdEventListener(AdEventType.ERROR, (error) => {
-    console.error("Interstitial error", error);
-    isLoaded = false;
+    console.log("[ads] interstitial error", error);
+    isInterstitialLoaded = false;
+    isInterstitialLoading = false;
+    interstitial = null;
   });
 
   return ad;
 }
 
-export async function preloadInterstitialAd() {
-  const premium = await isPremiumUser();
-  if (premium) return;
-
+function getOrCreateInterstitial() {
   if (!interstitial) {
     interstitial = createInterstitial();
-    interstitial.load();
+  }
+  return interstitial;
+}
+
+export async function preloadInterstitialAd() {
+  const premium = await isPremiumUser();
+  if (premium) {
     return;
   }
 
-  if (!isLoaded) {
-    interstitial.load();
+  if (isInterstitialLoaded || isInterstitialLoading) {
+    return;
   }
+
+  try {
+    const ad = getOrCreateInterstitial();
+    isInterstitialLoading = true;
+    ad.load();
+  } catch (error) {
+    console.log("[ads] preload failed", error);
+    isInterstitialLoading = false;
+    isInterstitialLoaded = false;
+    interstitial = null;
+  }
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function showInterstitialAd() {
@@ -74,21 +87,41 @@ export async function showInterstitialAd() {
   }
 
   try {
-    if (!interstitial) {
-      interstitial = createInterstitial();
-      interstitial.load();
+    const ad = getOrCreateInterstitial();
+
+    if (!isInterstitialLoaded) {
+      if (!isInterstitialLoading) {
+        isInterstitialLoading = true;
+        ad.load();
+      }
+
+      let retry = 0;
+      while (!isInterstitialLoaded && retry < 10) {
+        await wait(300);
+        retry += 1;
+      }
+    }
+
+    if (!isInterstitialLoaded) {
+      console.log("[ads] interstitial not ready");
       return false;
     }
 
-    if (!isLoaded) {
-      console.log("Interstitial not loaded yet");
-      return false;
-    }
-
-    await interstitial.show();
+    await ad.show();
     return true;
   } catch (error) {
-    console.error("Interstitial show failed", error);
+    console.log("[ads] show failed", error);
+    isInterstitialLoaded = false;
+    isInterstitialLoading = false;
+    interstitial = null;
     return false;
   }
+}
+
+export function getBannerAdUnitId() {
+  return bannerUnitId;
+}
+
+export function getBannerSize() {
+  return BannerAdSize.ANCHORED_ADAPTIVE_BANNER;
 }

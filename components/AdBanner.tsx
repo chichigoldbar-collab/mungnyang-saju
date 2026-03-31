@@ -1,53 +1,47 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import {
-  BannerAd,
-  BannerAdSize,
-  TestIds,
-} from "react-native-google-mobile-ads";
+import { BannerAd } from "react-native-google-mobile-ads";
+
+import { getBannerAdUnitId, getBannerSize } from "../utils/ads";
 import {
   isPremiumUser,
-  subscribePremiumAccess,
+  subscribePremiumChange,
 } from "../utils/premiumAccess";
 
-const adUnitId = __DEV__
-  ? TestIds.BANNER
-  : "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyyyyyy";
-
 export default function AdBanner() {
-  const [isPremium, setIsPremium] = useState(false);
+  const [hidden, setHidden] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
-    const sync = async () => {
+    const syncPremium = async () => {
       const premium = await isPremiumUser();
-      if (mounted) {
-        setIsPremium(premium);
+      if (isMounted) {
+        setHidden(premium);
       }
     };
 
-    sync();
+    syncPremium();
 
-    const unsubscribe = subscribePremiumAccess((premium) => {
-      setIsPremium(premium);
+    const unsubscribe = subscribePremiumChange((premium) => {
+      setHidden(premium);
     });
 
     return () => {
-      mounted = false;
+      isMounted = false;
       unsubscribe();
     };
   }, []);
 
-  if (isPremium) {
+  if (hidden) {
     return null;
   }
 
   return (
     <View style={styles.container}>
       <BannerAd
-        unitId={adUnitId}
-        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+        unitId={getBannerAdUnitId()}
+        size={getBannerSize()}
         requestOptions={{
           requestNonPersonalizedAdsOnly: true,
         }}
@@ -60,7 +54,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
-    paddingBottom: 6,
-    backgroundColor: "#FFFDFB",
+    paddingVertical: 6,
+    backgroundColor: "transparent",
   },
 });

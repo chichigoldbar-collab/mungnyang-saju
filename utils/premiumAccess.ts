@@ -2,62 +2,65 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const PREMIUM_ACCESS_KEY = "mungnyang-premium-access";
 
-type PremiumAccessState = {
-  allAccess: boolean;
-  unlockedAt: string;
-  productId: string;
-};
+type PremiumListener = (isPremium: boolean) => void;
 
-const listeners = new Set<(isPremium: boolean) => void>();
+const listeners = new Set<PremiumListener>();
 
-export async function getPremiumAccessState() {
+export async function isPremiumUser() {
   try {
     const raw = await AsyncStorage.getItem(PREMIUM_ACCESS_KEY);
-    if (!raw) return null;
+    if (!raw) return false;
 
-    const parsed = JSON.parse(raw) as Partial<PremiumAccessState>;
-    if (parsed?.allAccess !== true) return null;
-
-    return {
-      allAccess: true,
-      unlockedAt: String(parsed.unlockedAt ?? ""),
-      productId: String(parsed.productId ?? ""),
-    } satisfies PremiumAccessState;
+    const parsed = JSON.parse(raw);
+    return parsed?.allAccess === true;
   } catch (error) {
-    console.error("프리미엄 상태 불러오기 실패", error);
-    return null;
+    console.error("프리미엄 상태 확인 실패", error);
+    return false;
   }
 }
 
-export async function isPremiumUser() {
-  const state = await getPremiumAccessState();
-  return state?.allAccess === true;
+export async function enablePremiumAccess() {
+  try {
+    await AsyncStorage.setItem(
+      PREMIUM_ACCESS_KEY,
+      JSON.stringify({
+        allAccess: true,
+        unlockedAt: new Date().toISOString(),
+        productId: "all-access-990",
+      })
+    );
+
+    emitPremiumChanged(true);
+  } catch (error) {
+    console.error("프리미엄 상태 저장 실패", error);
+    throw error;
+  }
 }
 
-export async function setPremiumAccess() {
-  await AsyncStorage.setItem(
-    PREMIUM_ACCESS_KEY,
-    JSON.stringify({
-      allAccess: true,
-      unlockedAt: new Date().toISOString(),
-      productId: "all-access-990",
-    })
-  );
-
-  listeners.forEach((listener) => listener(true));
+export async function disablePremiumAccessForTest() {
+  try {
+    await AsyncStorage.removeItem(PREMIUM_ACCESS_KEY);
+    emitPremiumChanged(false);
+  } catch (error) {
+    console.error("프리미엄 상태 삭제 실패", error);
+    throw error;
+  }
 }
 
-export async function resetPremiumAccess() {
-  await AsyncStorage.removeItem(PREMIUM_ACCESS_KEY);
-  listeners.forEach((listener) => listener(false));
-}
-
-export function subscribePremiumAccess(
-  listener: (isPremium: boolean) => void
-) {
+export function subscribePremiumChange(listener: PremiumListener) {
   listeners.add(listener);
 
   return () => {
     listeners.delete(listener);
   };
+}
+
+export function emitPremiumChanged(isPremium: boolean) {
+  listeners.forEach((listener) => {
+    try {
+      listener(isPremium);
+    } catch (error) {
+      console.error("프리미엄 변경 리스너 오류", error);
+    }
+  });
 }

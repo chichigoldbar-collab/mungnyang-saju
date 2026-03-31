@@ -61,6 +61,14 @@ type DailyFortuneCacheItem = {
   recommendedAction: string;
 };
 
+function getTodayKey() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function getApiBaseUrl() {
   if (Platform.OS === "android") {
     return "http://10.0.2.2:4000";
@@ -75,6 +83,27 @@ function getApiBaseUrl() {
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getTodayFortuneFromCache(petId: string, todayKey: string) {
+  try {
+    const raw = await AsyncStorage.getItem(DAILY_FORTUNE_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const map =
+      parsed && typeof parsed === "object"
+        ? (parsed as Record<string, DailyFortuneCacheItem>)
+        : {};
+
+    const cached = map[petId];
+    if (cached && cached.dateKey === todayKey) {
+      return cached;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("오늘 운세 캐시 조회 실패", error);
+    return null;
+  }
 }
 
 async function saveDailyFortuneResult(item: DailyFortuneCacheItem) {
@@ -126,7 +155,7 @@ export default function LoadingScreen() {
   const petGender = String(params.petGender ?? "male") as PetGender;
   const isNeutered = String(params.isNeutered ?? "false") === "true";
   const breed = String(params.breed ?? "품종 미입력");
-  const birthDate = String(params.birthDate ?? "2024-01-01");
+  const birthDate = String(params.birthDate ?? "2024.01.01");
   const birthTime = String(params.birthTime ?? "시간 모름");
   const photoUri = String(params.photoUri ?? "");
 
@@ -161,8 +190,44 @@ export default function LoadingScreen() {
 
     let isCancelled = false;
 
+    const goToResult = (resultItem: DailyFortuneCacheItem) => {
+      router.replace({
+        pathname: "/result",
+        params: {
+          petId: resultItem.petId,
+          dateKey: resultItem.dateKey,
+          petName: resultItem.petName,
+          petType: resultItem.petType,
+          petGender: resultItem.petGender,
+          isNeutered: resultItem.isNeutered ? "true" : "false",
+          breed: resultItem.breed,
+          birthDate: resultItem.birthDate,
+          birthTime: resultItem.birthTime,
+          summary: resultItem.summary,
+          health: resultItem.health,
+          appetite: resultItem.appetite,
+          mood: resultItem.mood,
+          caution: resultItem.caution,
+          luckyColor: resultItem.luckyColor,
+          luckyItem: resultItem.luckyItem,
+          recommendedAction: resultItem.recommendedAction,
+          photoUri,
+        },
+      });
+    };
+
     const fetchDailyFortune = async () => {
       try {
+        const todayKey = getTodayKey();
+
+        const cachedToday = await getTodayFortuneFromCache(petId, todayKey);
+        if (cachedToday) {
+          if (!isCancelled) {
+            goToResult(cachedToday);
+          }
+          return;
+        }
+
         await showInterstitialAd();
         preloadInterstitialAd();
 
@@ -196,7 +261,7 @@ export default function LoadingScreen() {
 
         const resultItem: DailyFortuneCacheItem = {
           petId: json.data.petId,
-          dateKey: json.data.dateKey,
+          dateKey: todayKey,
           petName: json.data.petName,
           petType: json.data.petType,
           petGender: json.data.petGender,
@@ -217,30 +282,7 @@ export default function LoadingScreen() {
         await saveDailyFortuneResult(resultItem);
 
         if (isCancelled) return;
-
-        router.replace({
-          pathname: "/result",
-          params: {
-            petId: resultItem.petId,
-            dateKey: resultItem.dateKey,
-            petName: resultItem.petName,
-            petType: resultItem.petType,
-            petGender: resultItem.petGender,
-            isNeutered: resultItem.isNeutered ? "true" : "false",
-            breed: resultItem.breed,
-            birthDate: resultItem.birthDate,
-            birthTime: resultItem.birthTime,
-            summary: resultItem.summary,
-            health: resultItem.health,
-            appetite: resultItem.appetite,
-            mood: resultItem.mood,
-            caution: resultItem.caution,
-            luckyColor: resultItem.luckyColor,
-            luckyItem: resultItem.luckyItem,
-            recommendedAction: resultItem.recommendedAction,
-            photoUri,
-          },
-        });
+        goToResult(resultItem);
       } catch (error) {
         console.error("운세 API 호출 실패", error);
 
