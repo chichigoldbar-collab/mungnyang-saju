@@ -100,6 +100,86 @@ function getTodayKey() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function getAgeText(birthDate: string) {
+  const normalized = birthDate.replace(/\./g, "-").trim();
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return "나이 미확인";
+  }
+
+  const birth = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
+
+  if (Number.isNaN(birth.getTime())) {
+    return "나이 미확인";
+  }
+
+  const now = new Date();
+
+  let years = now.getFullYear() - birth.getFullYear();
+  let months = now.getMonth() - birth.getMonth();
+
+  if (now.getDate() < birth.getDate()) {
+    months -= 1;
+  }
+
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  if (years < 0) {
+    return "나이 미확인";
+  }
+
+  if (years === 0) {
+    return `${months}개월`;
+  }
+
+  return `${years}살 ${months}개월`;
+}
+
+function getLifeStageLabel(birthDate: string, petType: PetType) {
+  const normalized = birthDate.replace(/\./g, "-").trim();
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return "단계 미확인";
+  }
+
+  const birth = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
+
+  if (Number.isNaN(birth.getTime())) {
+    return "단계 미확인";
+  }
+
+  const now = new Date();
+  const totalMonths =
+    (now.getFullYear() - birth.getFullYear()) * 12 +
+    (now.getMonth() - birth.getMonth()) -
+    (now.getDate() < birth.getDate() ? 1 : 0);
+
+  if (petType === "cat") {
+    if (totalMonths < 6) return "키튼";
+    if (totalMonths < 12) return "주니어";
+    if (totalMonths < 84) return "어덜트";
+    return "시니어";
+  }
+
+  if (totalMonths < 6) return "퍼피";
+  if (totalMonths < 24) return "주니어";
+  if (totalMonths < 84) return "어덜트";
+  return "시니어";
+}
+
 function getApiBaseUrl() {
   if (Platform.OS === "android") {
     return "http://10.0.2.2:4000";
@@ -393,6 +473,14 @@ export default function HomeScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.topHeader}>
+          <Text style={styles.topHeaderTitle}>멍냥사주</Text>
+
+          <Pressable onPress={() => router.push("/menu")}>
+            <Text style={styles.menuIcon}>≡</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.heroCard}>
           <View style={styles.heroBadge}>
             <Text style={styles.heroBadgeText}>FREE FORTUNE</Text>
@@ -441,6 +529,8 @@ export default function HomeScreen() {
                 const todayFortune = dailyCacheMap[pet.id];
                 const hasViewedToday =
                   !!todayFortune && todayFortune.dateKey === todayKey;
+                const ageText = getAgeText(pet.birthDate);
+                const lifeStage = getLifeStageLabel(pet.birthDate, pet.petType);
 
                 return (
                   <View key={pet.id} style={styles.savedPetCard}>
@@ -459,7 +549,9 @@ export default function HomeScreen() {
                           />
                         ) : (
                           <View style={styles.petThumbFallback}>
-                            <Text style={styles.petThumbFallbackText}>{emoji}</Text>
+                            <Text style={styles.petThumbFallbackText}>
+                              {emoji}
+                            </Text>
                           </View>
                         )}
 
@@ -477,6 +569,21 @@ export default function HomeScreen() {
                           </View>
 
                           <Text style={styles.savedPetMeta}>{pet.breed}</Text>
+
+                          <View style={styles.petInfoRow}>
+                            <View style={styles.petBadge}>
+                              <Text style={styles.petBadgeText}>
+                                나이 · {ageText}
+                              </Text>
+                            </View>
+
+                            <View style={styles.petBadge}>
+                              <Text style={styles.petBadgeText}>
+                                {lifeStage}
+                              </Text>
+                            </View>
+                          </View>
+
                           <Text style={styles.savedPetMeta}>
                             생일 · {pet.birthDate}
                           </Text>
@@ -794,6 +901,22 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
     gap: 16,
   },
+  topHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  topHeaderTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+  menuIcon: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
   heroCard: {
     backgroundColor: COLORS.primary,
     borderRadius: 26,
@@ -922,6 +1045,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.subText,
     lineHeight: 18,
+  },
+  petInfoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  petBadge: {
+    backgroundColor: "#F7F2ED",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  petBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.text,
   },
   fortuneStatusRow: {
     marginTop: 12,

@@ -4,7 +4,10 @@ import {
   InterstitialAd,
   TestIds,
 } from "react-native-google-mobile-ads";
-import { isPremiumUser } from "./premiumAccess";
+import {
+  hasAdRemoval,
+  subscribePremiumChange,
+} from "./premiumAccess";
 
 const interstitialUnitId = __DEV__
   ? TestIds.INTERSTITIAL
@@ -17,6 +20,34 @@ const bannerUnitId = __DEV__
 let interstitial: InterstitialAd | null = null;
 let isInterstitialLoaded = false;
 let isInterstitialLoading = false;
+let isPremiumAdsBlocked = false;
+let hasBoundPremiumListener = false;
+
+function resetInterstitialState() {
+  isInterstitialLoaded = false;
+  isInterstitialLoading = false;
+  interstitial = null;
+}
+
+function bindPremiumAdStateListener() {
+  if (hasBoundPremiumListener) {
+    return;
+  }
+
+  hasBoundPremiumListener = true;
+
+  subscribePremiumChange((entitlements) => {
+    const premium = entitlements.allAccess || entitlements.removeAds;
+    isPremiumAdsBlocked = premium;
+
+    if (premium) {
+      resetInterstitialState();
+      return;
+    }
+
+    preloadInterstitialAd();
+  });
+}
 
 function createInterstitial() {
   const ad = InterstitialAd.createForAdRequest(interstitialUnitId, {
@@ -34,7 +65,10 @@ function createInterstitial() {
     isInterstitialLoaded = false;
     isInterstitialLoading = false;
     interstitial = null;
-    preloadInterstitialAd();
+
+    if (!isPremiumAdsBlocked) {
+      preloadInterstitialAd();
+    }
   });
 
   ad.addAdEventListener(AdEventType.ERROR, (error) => {
@@ -54,9 +88,18 @@ function getOrCreateInterstitial() {
   return interstitial;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function preloadInterstitialAd() {
-  const premium = await isPremiumUser();
+  bindPremiumAdStateListener();
+
+  const premium = await hasAdRemoval();
+  isPremiumAdsBlocked = premium;
+
   if (premium) {
+    resetInterstitialState();
     return;
   }
 
@@ -76,13 +119,14 @@ export async function preloadInterstitialAd() {
   }
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function showInterstitialAd() {
-  const premium = await isPremiumUser();
+  bindPremiumAdStateListener();
+
+  const premium = await hasAdRemoval();
+  isPremiumAdsBlocked = premium;
+
   if (premium) {
+    resetInterstitialState();
     return false;
   }
 

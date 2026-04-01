@@ -1,304 +1,936 @@
-import type { PetGender, PetType } from "../types";
-
-export type PersonalityKey =
-  | "energetic"
-  | "gentle"
-  | "curious"
-  | "independent"
-  | "affectionate"
-  | "sensitive";
-
-export type MoodKey =
-  | "up"
-  | "stable"
-  | "rest"
-  | "playful"
-  | "clingy"
-  | "alert";
-
-export type FocusKey =
-  | "walk"
-  | "food"
-  | "rest"
-  | "bonding"
-  | "play"
-  | "routine";
-
-export type CautionKey =
-  | "overexcited"
-  | "sensitive"
-  | "stranger"
-  | "speed"
-  | "space"
-  | "noise";
-
-export type FortuneTemplateSet = {
-  opening: string[];
-  mood: string[];
-  focus: string[];
-  closing: string[];
-};
-
-export const personalityKeys: PersonalityKey[] = [
-  "energetic",
-  "gentle",
-  "curious",
-  "independent",
-  "affectionate",
-  "sensitive",
-];
-
-export const moodKeys: MoodKey[] = [
-  "up",
-  "stable",
-  "rest",
-  "playful",
-  "clingy",
-  "alert",
-];
-
-export const focusKeys: FocusKey[] = [
-  "walk",
-  "food",
-  "rest",
-  "bonding",
-  "play",
-  "routine",
-];
-
-export const cautionKeys: CautionKey[] = [
-  "overexcited",
-  "sensitive",
-  "stranger",
-  "speed",
-  "space",
-  "noise",
-];
+import type { PetType } from "../types";
 
 export const luckyColors = [
   "크림 베이지",
-  "살구 피치",
-  "버터 옐로우",
-  "민트 그린",
-  "라벤더 퍼플",
-  "소프트 핑크",
-  "하늘 블루",
-  "코코아 브라운",
-  "오프화이트",
+  "따뜻한 아이보리",
+  "부드러운 살구색",
+  "꿀빛 노랑",
+  "연한 코랄",
+  "차분한 로즈",
+  "포근한 브라운",
   "올리브 그린",
-  "웜 그레이",
-  "밀크티 브라운",
-  "레몬 옐로우",
-  "피치 코랄",
-];
+  "세이지 그린",
+  "하늘빛 블루",
+  "딥 네이비",
+  "라벤더",
+  "은은한 보라",
+  "밀크 화이트",
+] as const;
 
 export const luckyItems = [
-  "폭신한 담요",
-  "좋아하는 간식 한 조각",
+  "푹신한 담요",
   "새 장난감",
+  "좋아하는 간식",
+  "깨끗한 물그릇",
   "익숙한 쿠션",
-  "평소 쓰던 하네스",
-  "부드러운 빗질 시간",
-  "창가 햇살 자리",
-  "산책 가방",
-  "따뜻한 물그릇",
-  "보호자 무릎",
-  "평소 쓰던 장난감 공",
-  "차분한 음악",
+  "산책 리드줄",
+  "스크래처",
+  "숨숨집",
   "포근한 방석",
-  "좋아하는 터그 장난감",
-];
+  "낚싯대 장난감",
+  "터그 장난감",
+  "공놀이 장난감",
+  "창가 자리",
+  "노즈워크 매트",
+] as const;
 
-export const recommendedActions = [
-  "오늘은 짧고 기분 좋은 놀이로 하루를 시작해 보세요.",
-  "과한 자극보다 익숙한 루틴을 지켜주는 게 좋아요.",
-  "사진 한 장 남길 만큼 편안한 순간을 만들어주세요.",
-  "간식보다 교감 시간을 조금 더 길게 가져가 보세요.",
-  "산책이나 놀이 뒤에 충분한 휴식 시간을 챙겨주세요.",
-  "좋아하는 공간을 정돈해주면 안정감을 더 느껴요.",
-  "칭찬 한마디와 부드러운 터치가 큰 힘이 될 수 있어요.",
-  "오늘은 속도보다 편안함을 우선해 주세요.",
-  "익숙한 향과 자리에서 쉬는 시간을 길게 주세요.",
-  "놀기 전보다 놀고 난 뒤의 안정 시간을 챙겨주세요.",
-  "오늘은 새로운 자극보다 편안한 반응을 우선해 주세요.",
-  "짧아도 반복되는 교감이 만족도를 높여줄 수 있어요.",
-];
+export const luckyItemsBySpecies = {
+  dog: [
+    "산책 리드줄",
+    "노즈워크 매트",
+    "공놀이 장난감",
+    "터그 장난감",
+    "좋아하는 간식",
+    "깨끗한 물그릇",
+    "푹신한 담요",
+    "포근한 방석",
+  ],
+  cat: [
+    "스크래처",
+    "숨숨집",
+    "낚싯대 장난감",
+    "창가 자리",
+    "익숙한 쿠션",
+    "깨끗한 물그릇",
+    "좋아하는 간식",
+    "포근한 방석",
+  ],
+} as const;
 
-const dogBase = {
+export type BreedSizeKey = "small" | "medium" | "large" | "unknown";
+export type BreedEnergyKey = "low" | "mid" | "high";
+export type BreedTemperamentTag =
+  | "affectionate"
+  | "social"
+  | "curious"
+  | "sensitive"
+  | "independent"
+  | "calm"
+  | "active"
+  | "alert";
+
+export type BreedProfile = {
+  size: BreedSizeKey;
+  energy: BreedEnergyKey;
+  temperamentTags: BreedTemperamentTag[];
+};
+
+/**
+ * 프리미엄 성격분석용 확장 프로필
+ * 기존 무료운세 구조는 유지하면서,
+ * 더 정교한 성격분석 로직에서 사용할 수 있도록 추가
+ */
+export type PersonalityLevel = "low" | "mid" | "high";
+
+export type BreedPersonalityProfile = {
+  energy: PersonalityLevel;
+  sociability: PersonalityLevel;
+  dependency: PersonalityLevel;
+  sensitivity: PersonalityLevel;
+  activity: PersonalityLevel;
+  routine: PersonalityLevel;
+};
+
+export const dogBreedProfiles: Record<string, BreedProfile> = {
+  말티즈: {
+    size: "small",
+    energy: "mid",
+    temperamentTags: ["affectionate", "sensitive", "social"],
+  },
+  말티푸: {
+    size: "small",
+    energy: "mid",
+    temperamentTags: ["affectionate", "curious", "social"],
+  },
+  포메라니안: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["alert", "curious", "sensitive"],
+  },
+  푸들: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["curious", "active", "social"],
+  },
+  토이푸들: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["curious", "social", "affectionate"],
+  },
+  미니어처푸들: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["curious", "active", "social"],
+  },
+  비숑프리제: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["social", "affectionate", "active"],
+  },
+  치와와: {
+    size: "small",
+    energy: "mid",
+    temperamentTags: ["alert", "sensitive", "affectionate"],
+  },
+  시츄: {
+    size: "small",
+    energy: "low",
+    temperamentTags: ["calm", "affectionate", "social"],
+  },
+  요크셔테리어: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["alert", "active", "curious"],
+  },
+  닥스훈트: {
+    size: "small",
+    energy: "mid",
+    temperamentTags: ["curious", "alert", "independent"],
+  },
+  웰시코기: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["active", "social", "alert"],
+  },
+  골든리트리버: {
+    size: "large",
+    energy: "high",
+    temperamentTags: ["social", "affectionate", "active"],
+  },
+  래브라도리트리버: {
+    size: "large",
+    energy: "high",
+    temperamentTags: ["social", "active", "affectionate"],
+  },
+  진돗개: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["independent", "alert", "calm"],
+  },
+  시바견: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["independent", "alert", "curious"],
+  },
+  프렌치불도그: {
+    size: "medium",
+    energy: "low",
+    temperamentTags: ["affectionate", "social", "calm"],
+  },
+  퍼그: {
+    size: "small",
+    energy: "low",
+    temperamentTags: ["affectionate", "social", "calm"],
+  },
+  스피츠: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["alert", "social", "curious"],
+  },
+  보더콜리: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["active", "curious", "alert"],
+  },
+  슈나우저: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["alert", "curious", "social"],
+  },
+  코카스파니엘: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["affectionate", "social", "curious"],
+  },
+  비글: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["active", "curious", "social"],
+  },
+  사모예드: {
+    size: "large",
+    energy: "high",
+    temperamentTags: ["social", "active", "affectionate"],
+  },
+  알래스칸말라뮤트: {
+    size: "large",
+    energy: "high",
+    temperamentTags: ["active", "independent", "alert"],
+  },
+  시베리안허스키: {
+    size: "large",
+    energy: "high",
+    temperamentTags: ["active", "curious", "independent"],
+  },
+  파피용: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["curious", "social", "active"],
+  },
+  페키니즈: {
+    size: "small",
+    energy: "low",
+    temperamentTags: ["calm", "independent", "affectionate"],
+  },
+  보스턴테리어: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["active", "social", "affectionate"],
+  },
+  도베르만: {
+    size: "large",
+    energy: "high",
+    temperamentTags: ["alert", "active", "social"],
+  },
+  셰틀랜드쉽독: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["alert", "social", "curious"],
+  },
+  믹스견: {
+    size: "unknown",
+    energy: "mid",
+    temperamentTags: ["curious", "social", "affectionate"],
+  },
+};
+
+export const catBreedProfiles: Record<string, BreedProfile> = {
+  코리안숏헤어: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["curious", "independent", "social"],
+  },
+  페르시안: {
+    size: "medium",
+    energy: "low",
+    temperamentTags: ["calm", "affectionate", "sensitive"],
+  },
+  러시안블루: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["independent", "sensitive", "calm"],
+  },
+  브리티시숏헤어: {
+    size: "medium",
+    energy: "low",
+    temperamentTags: ["calm", "independent", "affectionate"],
+  },
+  브리티시롱헤어: {
+    size: "medium",
+    energy: "low",
+    temperamentTags: ["calm", "independent", "affectionate"],
+  },
+  랙돌: {
+    size: "large",
+    energy: "low",
+    temperamentTags: ["affectionate", "calm", "social"],
+  },
+  스코티시폴드: {
+    size: "medium",
+    energy: "low",
+    temperamentTags: ["calm", "affectionate", "sensitive"],
+  },
+  샴: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["social", "active", "curious"],
+  },
+  먼치킨: {
+    size: "small",
+    energy: "mid",
+    temperamentTags: ["curious", "affectionate", "social"],
+  },
+  노르웨이숲: {
+    size: "large",
+    energy: "mid",
+    temperamentTags: ["independent", "curious", "calm"],
+  },
+  메인쿤: {
+    size: "large",
+    energy: "mid",
+    temperamentTags: ["social", "curious", "affectionate"],
+  },
+  벵갈: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["active", "curious", "alert"],
+  },
+  터키시앙고라: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["curious", "social", "independent"],
+  },
+  아비시니안: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["active", "curious", "social"],
+  },
+  봄베이: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["affectionate", "social", "curious"],
+  },
+  아메리칸숏헤어: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["calm", "curious", "independent"],
+  },
+  엑조틱숏헤어: {
+    size: "medium",
+    energy: "low",
+    temperamentTags: ["calm", "affectionate", "sensitive"],
+  },
+  스핑크스: {
+    size: "medium",
+    energy: "high",
+    temperamentTags: ["social", "affectionate", "active"],
+  },
+  버만: {
+    size: "medium",
+    energy: "mid",
+    temperamentTags: ["affectionate", "calm", "social"],
+  },
+  데본렉스: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["active", "social", "curious"],
+  },
+  코니시렉스: {
+    size: "small",
+    energy: "high",
+    temperamentTags: ["active", "social", "curious"],
+  },
+  믹스묘: {
+    size: "unknown",
+    energy: "mid",
+    temperamentTags: ["curious", "independent", "social"],
+  },
+};
+
+/**
+ * 프리미엄 성격분석용 세부 프로필
+ * 같은 품종이라도 더 세밀한 성향 문장 분기에 사용
+ */
+export const dogBreedPersonalityProfiles: Record<string, BreedPersonalityProfile> =
+  {
+    말티즈: {
+      energy: "mid",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "high",
+      activity: "mid",
+      routine: "mid",
+    },
+    말티푸: {
+      energy: "mid",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    포메라니안: {
+      energy: "high",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "high",
+      activity: "high",
+      routine: "low",
+    },
+    푸들: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "mid",
+    },
+    토이푸들: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "mid",
+    },
+    미니어처푸들: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "mid",
+    },
+    비숑프리제: {
+      energy: "high",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    치와와: {
+      energy: "mid",
+      sociability: "low",
+      dependency: "high",
+      sensitivity: "high",
+      activity: "mid",
+      routine: "high",
+    },
+    시츄: {
+      energy: "low",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "low",
+      routine: "high",
+    },
+    요크셔테리어: {
+      energy: "high",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "high",
+      activity: "high",
+      routine: "mid",
+    },
+    닥스훈트: {
+      energy: "mid",
+      sociability: "low",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "high",
+    },
+    웰시코기: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "mid",
+    },
+    골든리트리버: {
+      energy: "high",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "low",
+      activity: "high",
+      routine: "mid",
+    },
+    래브라도리트리버: {
+      energy: "high",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "low",
+      activity: "high",
+      routine: "mid",
+    },
+    진돗개: {
+      energy: "mid",
+      sociability: "low",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "high",
+    },
+    시바견: {
+      energy: "mid",
+      sociability: "low",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "high",
+    },
+    프렌치불도그: {
+      energy: "low",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "low",
+      routine: "high",
+    },
+    퍼그: {
+      energy: "low",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "low",
+      routine: "high",
+    },
+    스피츠: {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    보더콜리: {
+      energy: "high",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "high",
+      activity: "high",
+      routine: "high",
+    },
+    슈나우저: {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "high",
+    },
+    코카스파니엘: {
+      energy: "mid",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    비글: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    사모예드: {
+      energy: "high",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "low",
+      activity: "high",
+      routine: "mid",
+    },
+    알래스칸말라뮤트: {
+      energy: "high",
+      sociability: "mid",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "mid",
+    },
+    시베리안허스키: {
+      energy: "high",
+      sociability: "mid",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    파피용: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "mid",
+    },
+    페키니즈: {
+      energy: "low",
+      sociability: "low",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "low",
+      routine: "high",
+    },
+    보스턴테리어: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "mid",
+    },
+    도베르만: {
+      energy: "high",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "high",
+    },
+    셰틀랜드쉽독: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "high",
+      activity: "high",
+      routine: "high",
+    },
+    믹스견: {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+  };
+
+export const catBreedPersonalityProfiles: Record<string, BreedPersonalityProfile> =
+  {
+    코리안숏헤어: {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    페르시안: {
+      energy: "low",
+      sociability: "low",
+      dependency: "mid",
+      sensitivity: "high",
+      activity: "low",
+      routine: "high",
+    },
+    러시안블루: {
+      energy: "mid",
+      sociability: "low",
+      dependency: "low",
+      sensitivity: "high",
+      activity: "mid",
+      routine: "high",
+    },
+    브리티시숏헤어: {
+      energy: "low",
+      sociability: "low",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "low",
+      routine: "high",
+    },
+    브리티시롱헤어: {
+      energy: "low",
+      sociability: "low",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "low",
+      routine: "high",
+    },
+    랙돌: {
+      energy: "low",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "low",
+      routine: "mid",
+    },
+    스코티시폴드: {
+      energy: "low",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "high",
+      activity: "low",
+      routine: "high",
+    },
+    샴: {
+      energy: "high",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    먼치킨: {
+      energy: "mid",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    노르웨이숲: {
+      energy: "mid",
+      sociability: "low",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "high",
+    },
+    메인쿤: {
+      energy: "mid",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "low",
+      activity: "mid",
+      routine: "mid",
+    },
+    벵갈: {
+      energy: "high",
+      sociability: "mid",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    터키시앙고라: {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    아비시니안: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    봄베이: {
+      energy: "mid",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    아메리칸숏헤어: {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "low",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "high",
+    },
+    엑조틱숏헤어: {
+      energy: "low",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "high",
+      activity: "low",
+      routine: "high",
+    },
+    스핑크스: {
+      energy: "high",
+      sociability: "high",
+      dependency: "high",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    버만: {
+      energy: "mid",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+    데본렉스: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    코니시렉스: {
+      energy: "high",
+      sociability: "high",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "high",
+      routine: "low",
+    },
+    믹스묘: {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    },
+  };
+
+export function normalizeBreedName(breed: string) {
+  return breed.trim().replace(/\s+/g, "");
+}
+
+export function getBreedProfile(petType: PetType, breed: string): BreedProfile {
+  const normalized = normalizeBreedName(breed);
+
+  if (petType === "dog") {
+    return (
+      dogBreedProfiles[normalized] ?? {
+        size: "unknown",
+        energy: "mid",
+        temperamentTags: ["curious", "social"],
+      }
+    );
+  }
+
+  return (
+    catBreedProfiles[normalized] ?? {
+      size: "unknown",
+      energy: "mid",
+      temperamentTags: ["curious", "independent"],
+    }
+  );
+}
+
+export function getBreedPersonalityProfile(
+  petType: PetType,
+  breed: string
+): BreedPersonalityProfile {
+  const normalized = normalizeBreedName(breed);
+
+  if (petType === "dog") {
+    return (
+      dogBreedPersonalityProfiles[normalized] ?? {
+        energy: "mid",
+        sociability: "mid",
+        dependency: "mid",
+        sensitivity: "mid",
+        activity: "mid",
+        routine: "mid",
+      }
+    );
+  }
+
+  return (
+    catBreedPersonalityProfiles[normalized] ?? {
+      energy: "mid",
+      sociability: "mid",
+      dependency: "mid",
+      sensitivity: "mid",
+      activity: "mid",
+      routine: "mid",
+    }
+  );
+}
+
+export function getLuckyItemsBySpecies(petType: PetType) {
+  return luckyItemsBySpecies[petType];
+}
+
+export const personalityDescriptions = {
   energetic: {
-    opening: [
-      "오늘은 에너지가 빠르게 올라오는 흐름이 보여요.",
-      "몸보다 마음이 먼저 들뜨는 하루가 될 수 있어요.",
-      "평소보다 반응 속도가 빨라지는 무드예요.",
+    dog: [
+      "반응이 빠르고 활동 욕구가 살아나는 성향이 강해요.",
+      "움직임과 교감이 함께 올라오면 만족감이 커지는 타입이에요.",
     ],
-    mood: [
-      "좋아하는 사람의 리액션에 크게 신날 가능성이 있어요.",
-      "산책이나 놀이에서 적극성이 평소보다 커질 수 있어요.",
-      "재미있는 자극을 보면 바로 반응하고 싶어질 수 있어요.",
-    ],
-    focus: [
-      "짧고 명확한 놀이가 만족도를 높여줄 가능성이 커요.",
-      "에너지를 잘 써주면 하루 흐름이 훨씬 안정적일 수 있어요.",
-      "놀기와 쉬기의 균형을 맞추면 더 좋은 하루가 될 수 있어요.",
-    ],
-    closing: [
-      "기분 좋게 에너지를 풀면 만족감이 높은 하루가 될 거예요.",
-      "흥분만 잘 다스리면 오늘의 분위기를 아주 잘 살릴 수 있어요.",
-      "조금만 페이스를 조절해 주면 더 안정적인 하루가 될 수 있어요.",
+    cat: [
+      "흥미가 생기면 눈빛과 움직임이 빠르게 살아나는 편이에요.",
+      "가만히 있어 보여도 자극이 맞으면 에너지가 또렷하게 올라오는 타입이에요.",
     ],
   },
   gentle: {
-    opening: [
-      "오늘은 부드럽고 편안한 흐름이 강하게 느껴져요.",
-      "익숙한 공간에서 안정감을 크게 느끼는 날이에요.",
-      "전반적으로 한 템포 차분한 무드가 보여요.",
+    dog: [
+      "자극보다 안정감을 중시하는 편이라 차분한 리듬이 잘 맞아요.",
+      "편안한 분위기에서 만족도가 더 크게 올라가는 성향이에요.",
     ],
-    mood: [
-      "과한 자극보다 익숙한 반응을 더 좋아할 가능성이 커요.",
-      "좋아하는 사람 곁에서 차분한 만족감을 느끼기 쉬워요.",
-      "큰 이벤트보다 잔잔한 교감이 더 크게 다가올 수 있어요.",
-    ],
-    focus: [
-      "쉬는 공간의 분위기를 편안하게 유지해 주는 게 중요해요.",
-      "천천히 다가가는 교감이 더 잘 맞는 날일 수 있어요.",
-      "루틴이 안정적으로 유지될수록 기분도 차분해질 수 있어요.",
-    ],
-    closing: [
-      "조용하지만 만족감은 높은 하루가 될 가능성이 커요.",
-      "무리하지만 않으면 편안한 흐름이 오래 이어질 수 있어요.",
-      "차분한 리듬을 지켜주면 오늘의 좋은 무드가 더 살아날 수 있어요.",
+    cat: [
+      "과한 변화보다 익숙한 흐름을 선호하는 차분한 성향이 있어요.",
+      "조용한 교감과 안정적인 환경에서 편안함을 느끼는 편이에요.",
     ],
   },
   curious: {
-    opening: [
-      "오늘은 호기심이 평소보다 강하게 올라오는 날이에요.",
-      "새로운 냄새나 움직임에 관심이 커질 수 있어요.",
-      "주변을 탐색하고 싶어 하는 에너지가 살아나는 흐름이에요.",
+    dog: [
+      "새로운 냄새와 움직임에 대한 관심이 높은 편이에요.",
+      "탐색 욕구가 살아나면 집중력도 함께 올라가는 타입이에요.",
     ],
-    mood: [
-      "평소엔 지나치던 자극에도 시선이 오래 머물 수 있어요.",
-      "익숙한 환경에서도 새로운 포인트를 찾으려 할 수 있어요.",
-      "무언가를 확인하고 싶어 하는 마음이 강해질 수 있어요.",
-    ],
-    focus: [
-      "탐색 시간을 충분히 주면 만족도가 높아질 가능성이 커요.",
-      "무리하지 않는 선에서 구경할 시간을 주는 게 좋아요.",
-      "짧고 가벼운 자극이 하루 흐름을 더 재미있게 만들어줄 수 있어요.",
-    ],
-    closing: [
-      "호기심을 편안하게 풀어주면 기분 좋은 하루로 이어질 수 있어요.",
-      "지나친 자극만 피하면 오늘의 탐색 본능을 잘 살릴 수 있어요.",
-      "조금만 여유를 주면 만족감이 높아질 가능성이 커요.",
+    cat: [
+      "관찰하고 확인하는 과정 자체에서 흥미를 느끼는 성향이 있어요.",
+      "환경을 천천히 읽은 뒤 반응하는 탐색형 기질이 살아 있어요.",
     ],
   },
   independent: {
-    opening: [
-      "오늘은 자기 페이스를 지키고 싶어 하는 흐름이 보여요.",
-      "혼자만의 리듬을 존중받고 싶어지는 날일 수 있어요.",
-      "주도권을 스스로 쥐고 싶어 하는 무드가 느껴져요.",
+    dog: [
+      "혼자만의 템포를 지키려는 성향이 있어 거리 조절이 중요해요.",
+      "항상 붙어 있기보다 자기 리듬을 존중받을 때 안정감을 느껴요.",
     ],
-    mood: [
-      "관심은 좋지만 타이밍은 스스로 정하고 싶어 할 수 있어요.",
-      "편안한 거리감을 유지할수록 반응이 좋아질 수 있어요.",
-      "혼자 쉬는 시간과 교감 시간이 분리되면 더 안정적일 수 있어요.",
-    ],
-    focus: [
-      "억지로 끌어오기보다 다가올 때 반응해 주는 게 좋아요.",
-      "자기 자리를 편안하게 느끼게 해주는 게 중요해요.",
-      "적당한 거리에서 지켜봐 주는 방식이 잘 맞을 수 있어요.",
-    ],
-    closing: [
-      "오늘은 존중받는다는 느낌이 큰 안정으로 이어질 수 있어요.",
-      "페이스를 맞춰주면 편안한 하루가 될 가능성이 커요.",
-      "강요 없는 교감이 가장 큰 만족을 줄 수 있는 날이에요.",
+    cat: [
+      "자기 거리와 자기 자리를 중요하게 여기는 성향이 강해요.",
+      "먼저 다가오기보다 스스로 타이밍을 정하는 편이에요.",
     ],
   },
   affectionate: {
-    opening: [
-      "오늘은 애정 표현이 더 풍부해질 가능성이 있어요.",
-      "좋아하는 사람에게 마음이 쉽게 쏠리는 하루예요.",
-      "관심과 반응을 평소보다 더 원할 수 있어요.",
+    dog: [
+      "보호자와의 교감에서 정서적 안정이 크게 올라가는 타입이에요.",
+      "칭찬과 반응이 하루 컨디션에 좋은 영향을 주는 편이에요.",
     ],
-    mood: [
-      "눈맞춤이나 짧은 터치에도 만족감이 크게 올라갈 수 있어요.",
-      "좋아하는 사람 곁에서 안정감과 애정이 함께 커질 수 있어요.",
-      "반응을 잘 받아주면 애교가 더 늘어날 가능성이 있어요.",
-    ],
-    focus: [
-      "짧아도 자주 교감하는 방식이 특히 잘 맞을 수 있어요.",
-      "칭찬과 반응이 하루 흐름을 부드럽게 만들어줄 수 있어요.",
-      "같이 있는 시간을 의식적으로 만들어주는 게 좋아요.",
-    ],
-    closing: [
-      "작은 교감만으로도 기분 좋은 하루가 될 가능성이 커요.",
-      "애정을 잘 받아주면 만족도 높은 흐름으로 이어질 수 있어요.",
-      "오늘은 함께 있다는 느낌이 특히 중요하게 작용할 수 있어요.",
+    cat: [
+      "가까운 존재를 의식하고 정서적으로 기대는 흐름이 살아 있어요.",
+      "길게 표현하지 않아도 익숙한 사람 곁에서 안정감을 느끼는 편이에요.",
     ],
   },
   sensitive: {
-    opening: [
-      "오늘은 감각이 예민하게 깨어 있는 날일 수 있어요.",
-      "작은 변화에도 반응이 평소보다 빨라질 가능성이 있어요.",
-      "평소보다 분위기를 더 세심하게 읽는 흐름이 느껴져요.",
+    dog: [
+      "분위기와 말투, 낯선 자극에 예민하게 반응할 수 있어요.",
+      "작은 변화도 크게 느낄 수 있어 템포 조절이 중요해요.",
     ],
-    mood: [
-      "편안한 환경에서는 부드럽지만, 낯선 자극에는 예민해질 수 있어요.",
-      "사소한 소리나 움직임도 크게 느껴질 수 있어요.",
-      "익숙한 대상에게는 괜찮지만 낯선 흐름에는 민감할 수 있어요.",
-    ],
-    focus: [
-      "차분하고 익숙한 환경을 유지해 주는 게 가장 중요해요.",
-      "새로운 자극보다는 안정감을 주는 루틴이 더 잘 맞을 수 있어요.",
-      "강한 놀이보다 편안한 휴식과 부드러운 반응이 더 좋아요.",
-    ],
-    closing: [
-      "안정된 분위기만 지켜주면 편안하게 하루를 보낼 수 있어요.",
-      "오늘은 보호자의 차분한 반응이 큰 도움이 될 수 있어요.",
-      "과한 변화만 피하면 무난하고 부드러운 하루가 될 수 있어요.",
+    cat: [
+      "소리와 환경 변화에 대한 감각이 섬세한 편이에요.",
+      "불편한 자극이 겹치면 평소보다 빨리 거리 두기를 할 수 있어요.",
     ],
   },
-};
-
-const catBase = {
-  energetic: {
-    opening: [
-      "오늘은 생각보다 빠르게 반응하는 흐름이 보여요.",
-      "차분해 보여도 순간적으로 에너지가 튀어오를 수 있어요.",
-      "가만히 있다가도 갑자기 움직이고 싶어질 수 있는 날이에요.",
-    ],
-    mood: [
-      "짧고 강한 몰입이 반복될 가능성이 있어요.",
-      "마음에 드는 자극을 발견하면 집중도가 급격히 올라갈 수 있어요.",
-      "관찰하다가도 원하는 순간엔 바로 움직일 수 있어요.",
-    ],
-    focus: [
-      "짧은 놀이를 여러 번 나눠주는 방식이 잘 맞을 수 있어요.",
-      "순간적인 에너지를 부드럽게 풀어줄 리듬이 중요해요.",
-      "흥미를 느끼는 대상을 가볍게 탐색하게 해주는 게 좋아요.",
-    ],
-    closing: [
-      "짧고 선명한 만족이 쌓이는 하루가 될 가능성이 있어요.",
-      "리듬만 잘 맞춰주면 기분 좋은 흐름으로 이어질 수 있어요.",
-      "몰입과 휴식의 균형이 오늘의 핵심이 될 수 있어요.",
-    ],
-  },
-  gentle: dogBase.gentle,
-  curious: dogBase.curious,
-  independent: dogBase.independent,
-  affectionate: dogBase.affectionate,
-  sensitive: dogBase.sensitive,
-};
-
-export const fortuneTemplates: Record<
-  PetType,
-  Record<PetGender, typeof dogBase>
-> = {
-  dog: {
-    male: dogBase,
-    female: dogBase,
-  },
-  cat: {
-    male: catBase,
-    female: catBase,
-  },
-};
+} as const;

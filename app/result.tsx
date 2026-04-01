@@ -1,7 +1,7 @@
 import * as MediaLibrary from "expo-media-library";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -18,10 +18,110 @@ import { captureRef } from "react-native-view-shot";
 import AppButton from "../components/AppButton";
 import SectionCard from "../components/SectionCard";
 import { COLORS } from "../constants/colors";
+import type { PetType } from "../types";
+import {
+  canUsePremiumNaming,
+  canUsePremiumPersonality,
+  getPremiumEntitlements,
+  type PremiumEntitlements,
+} from "../utils/premiumAccess";
+
+function getAgeText(birthDate: string) {
+  const normalized = birthDate.replace(/\./g, "-").trim();
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return "나이 미확인";
+
+  const birth = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
+
+  if (Number.isNaN(birth.getTime())) return "나이 미확인";
+
+  const now = new Date();
+
+  let years = now.getFullYear() - birth.getFullYear();
+  let months = now.getMonth() - birth.getMonth();
+
+  if (now.getDate() < birth.getDate()) {
+    months -= 1;
+  }
+
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  if (years < 0) return "나이 미확인";
+
+  if (years === 0) return `${months}개월`;
+
+  return `${years}살 ${months}개월`;
+}
+
+function getLifeStageLabel(birthDate: string, petType: PetType) {
+  const normalized = birthDate.replace(/\./g, "-").trim();
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return "단계 미확인";
+
+  const birth = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
+
+  if (Number.isNaN(birth.getTime())) return "단계 미확인";
+
+  const now = new Date();
+  const totalMonths =
+    (now.getFullYear() - birth.getFullYear()) * 12 +
+    (now.getMonth() - birth.getMonth()) -
+    (now.getDate() < birth.getDate() ? 1 : 0);
+
+  if (petType === "cat") {
+    if (totalMonths < 6) return "키튼";
+    if (totalMonths < 12) return "주니어";
+    if (totalMonths < 84) return "어덜트";
+    return "시니어";
+  }
+
+  if (totalMonths < 6) return "퍼피";
+  if (totalMonths < 24) return "주니어";
+  if (totalMonths < 84) return "어덜트";
+  return "시니어";
+}
+
+const defaultEntitlements: PremiumEntitlements = {
+  allAccess: false,
+  removeAds: false,
+  premiumPersonality: false,
+  premiumNaming: false,
+};
 
 export default function ResultScreen() {
   const params = useLocalSearchParams();
   const captureViewRef = useRef<View>(null);
+
+  const [entitlements, setEntitlements] =
+    useState<PremiumEntitlements>(defaultEntitlements);
+
+  const loadPremiumState = useCallback(async () => {
+    try {
+      const value = await getPremiumEntitlements();
+      setEntitlements(value);
+    } catch (error) {
+      console.error("프리미엄 상태 조회 실패", error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPremiumState();
+    }, [loadPremiumState])
+  );
 
   const petId = String(params.petId ?? "");
   const petName = String(params.petName ?? "코코");
@@ -49,7 +149,10 @@ export default function ResultScreen() {
   const petEmoji = petType === "cat" ? "🐱" : "🐶";
   const petTypeLabel = petType === "cat" ? "고양이" : "강아지";
   const genderLabel = petGender === "female" ? "여아" : "남아";
-  const neuteredLabel = isNeutered === "true" ? "중성화 완료" : "중성화 미완료";
+  const neuteredLabel =
+    isNeutered === "true" ? "중성화 완료" : "중성화 미완료";
+  const ageText = getAgeText(birthDate);
+  const lifeStage = getLifeStageLabel(birthDate, petType as PetType);
 
   const shareText = `[${petName}의 오늘 운세]
 ${summary}
@@ -93,7 +196,9 @@ ${recommendedAction}`;
         return;
       }
 
-      const permission = await MediaLibrary.requestPermissionsAsync(true, ["photo"]);
+      const permission = await MediaLibrary.requestPermissionsAsync(true, [
+        "photo",
+      ]);
 
       if (!permission.granted) {
         Alert.alert("권한 필요", "이미지를 저장하려면 사진 권한이 필요해요.");
@@ -107,7 +212,7 @@ ${recommendedAction}`;
       try {
         await MediaLibrary.createAlbumAsync("Pictures", asset, false);
       } catch {
-        // 앨범이 이미 있거나 생성 실패해도 asset 자체는 저장됨
+        // 앨범 생성 실패 무시
       }
 
       Alert.alert("저장 완료", "운세 이미지를 사진첩에 저장했어요.");
@@ -138,7 +243,24 @@ ${recommendedAction}`;
     }
   };
 
-  const goToPersonality = () => {
+  const goToPersonality = async () => {
+    const allowed = await canUsePremiumPersonality();
+
+    if (!allowed) {
+      Alert.alert(
+        "프리미엄 기능",
+        "성격 분석은 프리미엄에서 이용할 수 있어요.",
+        [
+          { text: "닫기", style: "cancel" },
+          {
+            text: "프리미엄 보기",
+            onPress: () => router.push("/(tabs)/premium"),
+          },
+        ]
+      );
+      return;
+    }
+
     router.push({
       pathname: "/(tabs)/personality",
       params: {
@@ -155,7 +277,24 @@ ${recommendedAction}`;
     });
   };
 
-  const goToNaming = () => {
+  const goToNaming = async () => {
+    const allowed = await canUsePremiumNaming();
+
+    if (!allowed) {
+      Alert.alert(
+        "프리미엄 기능",
+        "작명 풀이는 프리미엄에서 이용할 수 있어요.",
+        [
+          { text: "닫기", style: "cancel" },
+          {
+            text: "프리미엄 보기",
+            onPress: () => router.push("/(tabs)/premium"),
+          },
+        ]
+      );
+      return;
+    }
+
     router.push({
       pathname: "/(tabs)/naming",
       params: {
@@ -218,6 +357,12 @@ ${recommendedAction}`;
                   <View style={styles.metaChip}>
                     <Text style={styles.metaChipText}>{neuteredLabel}</Text>
                   </View>
+                  <View style={styles.metaChip}>
+                    <Text style={styles.metaChipText}>나이 · {ageText}</Text>
+                  </View>
+                  <View style={styles.metaChip}>
+                    <Text style={styles.metaChipText}>{lifeStage}</Text>
+                  </View>
                 </View>
 
                 <Text style={styles.petMeta}>{breed}</Text>
@@ -277,6 +422,72 @@ ${recommendedAction}`;
             <Text style={styles.recommendDesc}>{recommendedAction}</Text>
           </View>
         </SectionCard>
+
+        <SectionCard>
+          <Text style={styles.sectionTitle}>프리미엄 혜택</Text>
+
+          <View style={styles.premiumUpsellCard}>
+            <View style={styles.premiumUpsellTop}>
+              <Text style={styles.premiumUpsellTitle}>
+                프리미엄을 열면 더 편하게 사용할 수 있어요
+              </Text>
+
+              <View
+                style={[
+                  styles.premiumStatusBadge,
+                  entitlements.allAccess
+                    ? styles.premiumStatusBadgeOn
+                    : styles.premiumStatusBadgeOff,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.premiumStatusBadgeText,
+                    entitlements.allAccess
+                      ? styles.premiumStatusBadgeTextOn
+                      : styles.premiumStatusBadgeTextOff,
+                  ]}
+                >
+                  {entitlements.allAccess ? "이용 중" : "₩990"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.premiumBenefitList}>
+              <View style={styles.premiumBenefitItem}>
+                <Text style={styles.premiumBenefitEmoji}>🚫</Text>
+                <Text style={styles.premiumBenefitText}>광고 제거</Text>
+              </View>
+
+              <View style={styles.premiumBenefitItem}>
+                <Text style={styles.premiumBenefitEmoji}>🔥</Text>
+                <Text style={styles.premiumBenefitText}>성격 분석 열기</Text>
+              </View>
+
+              <View style={styles.premiumBenefitItem}>
+                <Text style={styles.premiumBenefitEmoji}>✍️</Text>
+                <Text style={styles.premiumBenefitText}>작명 풀이 열기</Text>
+              </View>
+            </View>
+
+            {!entitlements.allAccess ? (
+              <View style={styles.premiumButtonWrap}>
+                <AppButton
+                  title="₩990으로 프리미엄 열기"
+                  onPress={() => router.push("/(tabs)/premium")}
+                />
+              </View>
+            ) : (
+              <View style={styles.premiumButtonWrap}>
+                <AppButton
+                  title="프리미엄 관리 보기"
+                  onPress={() => router.push("/(tabs)/premium")}
+                  variant="secondary"
+                />
+              </View>
+            )}
+          </View>
+        </SectionCard>
       </View>
 
       <SectionCard>
@@ -301,22 +512,37 @@ ${recommendedAction}`;
         <Text style={styles.sectionTitle}>추가 분석</Text>
 
         <Pressable style={styles.linkCard} onPress={goToPersonality}>
-          <Text style={styles.linkCardTitle}>🔥 성격 분석</Text>
-          <Text style={styles.linkCardDesc}>
-            타고난 성향과 행동 패턴을 분석해요
+          <View style={styles.linkTextWrap}>
+            <Text style={styles.linkCardTitle}>🔥 성격 분석</Text>
+            <Text style={styles.linkCardDesc}>
+              타고난 성향과 행동 패턴을 분석해요
+            </Text>
+          </View>
+          <Text style={styles.lockText}>
+            {entitlements.premiumPersonality ? "OPEN" : "LOCK"}
           </Text>
         </Pressable>
 
         <Pressable style={styles.linkCard} onPress={goToNaming}>
-          <Text style={styles.linkCardTitle}>✍️ 이름 풀이</Text>
-          <Text style={styles.linkCardDesc}>이름에 담긴 기운을 분석해요</Text>
+          <View style={styles.linkTextWrap}>
+            <Text style={styles.linkCardTitle}>✍️ 이름 풀이</Text>
+            <Text style={styles.linkCardDesc}>
+              이름에 담긴 기운을 분석해요
+            </Text>
+          </View>
+          <Text style={styles.lockText}>
+            {entitlements.premiumNaming ? "OPEN" : "LOCK"}
+          </Text>
         </Pressable>
 
         <Pressable style={styles.linkCard} onPress={goToCompatibility}>
-          <Text style={styles.linkCardTitle}>💞 보호자 궁합</Text>
-          <Text style={styles.linkCardDesc}>
-            보호자와의 관계 흐름을 분석해요
-          </Text>
+          <View style={styles.linkTextWrap}>
+            <Text style={styles.linkCardTitle}>💞 보호자 궁합</Text>
+            <Text style={styles.linkCardDesc}>
+              보호자와의 관계 흐름을 분석해요
+            </Text>
+          </View>
+          <Text style={styles.freeText}>FREE</Text>
         </Pressable>
       </SectionCard>
 
@@ -515,6 +741,65 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: COLORS.subText,
   },
+  premiumUpsellCard: {
+    backgroundColor: "#FFF8F0",
+    borderRadius: 18,
+    padding: 16,
+  },
+  premiumUpsellTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  premiumUpsellTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.text,
+    lineHeight: 22,
+  },
+  premiumStatusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  premiumStatusBadgeOn: {
+    backgroundColor: "#EEF8EE",
+  },
+  premiumStatusBadgeOff: {
+    backgroundColor: "#FFE7C9",
+  },
+  premiumStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  premiumStatusBadgeTextOn: {
+    color: "#2F7D32",
+  },
+  premiumStatusBadgeTextOff: {
+    color: "#9A5B00",
+  },
+  premiumBenefitList: {
+    gap: 10,
+    marginTop: 14,
+  },
+  premiumBenefitItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  premiumBenefitEmoji: {
+    fontSize: 18,
+  },
+  premiumBenefitText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  premiumButtonWrap: {
+    marginTop: 16,
+  },
   actionGroup: {
     gap: 10,
   },
@@ -523,6 +808,13 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     backgroundColor: "#F7F2ED",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
+  linkTextWrap: {
+    flex: 1,
   },
   linkCardTitle: {
     fontSize: 16,
@@ -533,5 +825,23 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     color: COLORS.subText,
+  },
+  lockText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: COLORS.text,
+    backgroundColor: COLORS.accentSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  freeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#2F7D32",
+    backgroundColor: "#EEF8EE",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
 });

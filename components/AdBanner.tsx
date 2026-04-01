@@ -4,18 +4,19 @@ import { BannerAd } from "react-native-google-mobile-ads";
 
 import { getBannerAdUnitId, getBannerSize } from "../utils/ads";
 import {
-  isPremiumUser,
+  hasAdRemoval,
   subscribePremiumChange,
 } from "../utils/premiumAccess";
 
 export default function AdBanner() {
   const [hidden, setHidden] = useState(true);
+  const [bannerKey, setBannerKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     const syncPremium = async () => {
-      const premium = await isPremiumUser();
+      const premium = await hasAdRemoval();
       if (isMounted) {
         setHidden(premium);
       }
@@ -23,8 +24,14 @@ export default function AdBanner() {
 
     syncPremium();
 
-    const unsubscribe = subscribePremiumChange((premium) => {
+    const unsubscribe = subscribePremiumChange((entitlements) => {
+      const premium = entitlements.allAccess || entitlements.removeAds;
+
       setHidden(premium);
+
+      if (!premium) {
+        setBannerKey((prev) => prev + 1);
+      }
     });
 
     return () => {
@@ -40,6 +47,7 @@ export default function AdBanner() {
   return (
     <View style={styles.container}>
       <BannerAd
+        key={bannerKey}
         unitId={getBannerAdUnitId()}
         size={getBannerSize()}
         requestOptions={{

@@ -114,8 +114,8 @@ async function getCompatibilityAdHistory() {
   }
 }
 
-async function shouldShowCompatibilityAd(petId: string) {
-  if (!petId) return false;
+async function shouldShowCompatibilityAd(petId: string, premium: boolean) {
+  if (!petId || premium) return false;
 
   const history = await getCompatibilityAdHistory();
   return history[petId] !== true;
@@ -378,7 +378,7 @@ export default function CompatibilityScreen() {
     setResult(null);
 
     try {
-      const needAd = await shouldShowCompatibilityAd(selectedPet.id);
+      const needAd = await shouldShowCompatibilityAd(selectedPet.id, isPremium);
 
       if (needAd) {
         await showInterstitialAd();
