@@ -420,10 +420,10 @@ function getBase64Payload(dataUrl: string) {
 }
 
 function resolveEndpoint(species: Species) {
-  // HF_CAT_BREED_GUESS_ENDPOINT can be set independently later. Until then,
-  // the shared dedicated server handles both species via the `species` field.
+  // Keep cat inference independent from the legacy dog endpoint. Both models
+  // use Hugging Face's free inference router; no paid server is required.
   const configured = species === "cat"
-    ? Deno.env.get("HF_CAT_BREED_GUESS_ENDPOINT")?.trim() || Deno.env.get("HF_BREED_GUESS_ENDPOINT")?.trim()
+    ? Deno.env.get("HF_CAT_BREED_GUESS_ENDPOINT")?.trim()
     : Deno.env.get("HF_BREED_GUESS_ENDPOINT")?.trim();
 
   if (!configured) {
