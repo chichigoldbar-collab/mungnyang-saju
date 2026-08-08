@@ -20,7 +20,7 @@ function getCorsHeaders(request: Request) {
 const DEFAULT_MODEL_ENDPOINT =
   "https://router.huggingface.co/hf-inference/models/prithivMLmods/Dog-Breed-120";
 const DEFAULT_CAT_MODEL_ENDPOINT =
-  "https://api-inference.huggingface.co/models/dima806/cat_breed_image_detection";
+  "https://router.huggingface.co/hf-inference/models/dima806/cat_breed_image_detection";
 // 전용 모델 서버가 슬립 상태에서 깨어나는 시간까지 고려합니다.
 // 기존 7초 제한은 정상 추론도 중간에 취소시키는 경우가 있었습니다.
 const HF_REQUEST_TIMEOUT_MS = 25_000;
@@ -320,6 +320,14 @@ function toKoBreed(label: string, species: Species) {
   return map[normalized] ?? map[normalized.replace(/\s+/g, "_")] ?? normalizeLabel(label);
 }
 
+function isKnownCatLabel(label: string) {
+  const normalized = normalizeLabel(label).toLowerCase();
+  return Boolean(
+    CAT_BREED_KO_MAP[normalized] ||
+    CAT_BREED_KO_MAP[normalized.replace(/\s+/g, "_")]
+  );
+}
+
 function hasKorean(value: string) {
   return /[가-힣]/.test(value);
 }
@@ -351,7 +359,12 @@ function normalizePredictions(raw: unknown, species: Species, limit: number): Br
         note: row.note ?? "사진 기반 AI 추정 후보입니다.",
       };
     })
-    .filter((item) => item.breedEn.length > 0 || item.breedKo.length > 0)
+    .filter((item) => {
+      if (!item.breedEn.length && !item.breedKo.length) return false;
+      // A stale dog-only endpoint can return HTTP 200 for a cat request.
+      // Do not display those dog labels as cat results.
+      return species !== "cat" || isKnownCatLabel(item.breedEn || item.breedKo);
+    })
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, limit);
 }
@@ -407,10 +420,10 @@ function getBase64Payload(dataUrl: string) {
 }
 
 function resolveEndpoint(species: Species) {
-  // The existing shared endpoint is dog-only. Never send a cat image there:
-  // older deployments silently return dog labels instead of an explicit error.
+  // HF_CAT_BREED_GUESS_ENDPOINT can be set independently later. Until then,
+  // the shared dedicated server handles both species via the `species` field.
   const configured = species === "cat"
-    ? Deno.env.get("HF_CAT_BREED_GUESS_ENDPOINT")?.trim()
+    ? Deno.env.get("HF_CAT_BREED_GUESS_ENDPOINT")?.trim() || Deno.env.get("HF_BREED_GUESS_ENDPOINT")?.trim()
     : Deno.env.get("HF_BREED_GUESS_ENDPOINT")?.trim();
 
   if (!configured) {
@@ -567,6 +580,7 @@ async function callHuggingFace(imageDataUrl: string, species: Species) {
 
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
+  let requestedSpecies: Species = "dog";
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -579,6 +593,7 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const imageDataUrl = String(body.imageDataUrl ?? body.imageBase64 ?? "");
     const species: Species = body.species === "cat" ? "cat" : "dog";
+    requestedSpecies = species;
 
     if (!imageDataUrl.startsWith("data:image/")) {
       return json(
@@ -606,8 +621,9 @@ serve(async (req: Request) => {
     return json(
       {
         success: false,
-        message:
-          error instanceof Error
+        message: requestedSpecies === "cat"
+          ? "고양이를 찾지 못했어요. 고양이가 선명하게 나온 사진으로 다시 시도해주세요."
+          : error instanceof Error
             ? error.message
             : "견종 추정 중 오류가 발생했습니다.",
       },
