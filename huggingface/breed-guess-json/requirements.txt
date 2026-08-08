@@ -1,0 +1,8 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+huggingface_hub==0.31.2
+fastai==2.7.19
+pillow==11.2.1
+torch==2.6.0
+torchvision==0.21.0
+transformers==4.48.3
