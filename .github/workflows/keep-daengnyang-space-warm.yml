@@ -1,0 +1,34 @@
+name: Keep Daengnyang AI Space Warm
+
+on:
+  schedule:
+    # 09:15 and 21:15 KST (UTC+9)
+    - cron: "15 */12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  warm-space:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check model readiness with retries
+        shell: bash
+        run: |
+          readonly READY_URL="https://teddymansion-daengnyang-breed-guess-json.hf.space/ready"
+
+          for attempt in $(seq 1 10); do
+            status=$(curl --silent --show-error --output /tmp/space-ready.json --write-out "%{http_code}" --max-time 90 "$READY_URL" || true)
+            if [ "$status" = "200" ]; then
+              cat /tmp/space-ready.json
+              exit 0
+            fi
+
+            echo "Space is not ready yet (HTTP $status, attempt $attempt/10)."
+            sleep 60
+          done
+
+          echo "Space did not become ready after 10 attempts."
+          exit 1
