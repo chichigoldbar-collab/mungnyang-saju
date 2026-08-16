@@ -2,8 +2,8 @@ name: Keep Daengnyang AI Space Warm
 
 on:
   schedule:
-    # 09:15 and 21:15 KST (UTC+9)
-    - cron: "15 */12 * * *"
+    # Every six hours at :15 (KST: 03:15, 09:15, 15:15, 21:15)
+    - cron: "15 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,15 +18,28 @@ jobs:
         shell: bash
         run: |
           readonly READY_URL="https://teddymansion-daengnyang-breed-guess-json.hf.space/ready"
+          readonly CAT_PREDICT_URL="https://teddymansion-daengnyang-breed-guess-json.hf.space/predict"
+          readonly CAT_TEST_IMAGE="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAYAAAAiYZ4HAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAARGVYSWZNTQAqAAAACAABh2kABAAAAAEAAAAaAAAAAAADoAEAAwAAAAEAAQAAoAIABAAAAAEAAAAMoAMABAAAAAEAAAAQAAAAALYcgN4AAAHLaVRYdFhNTDpjb20uYWRvYmUueG1wAAAAAAA8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJYTVAgQ29yZSA2LjAuMCI+CiAgIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgICAgIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIj4KICAgICAgICAgPGV4aWY6Q29sb3JTcGFjZT4xPC9leGlmOkNvbG9yU3BhY2U+CiAgICAgICAgIDxleGlmOlBpeGVsWERpbWVuc2lvbj40MDk8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpQaXhlbFlEaW1lbnNpb24+NTEyPC9leGlmOlBpeGVsWERpbWVuc2lvbj4KICAgICAgPC9yZGY6RGVzY3JpcHRpb24+CiAgIDwvcmRmOlJERj4KPC94OnhtcG1ldGE+CoSY23cAAAJGSURBVCgVlVJLaBNhEJ59JtnsI+kmNGmatKSG2uiWWmt7KRiwB8GjGDz10INFT570ph6leBG8tKcintRLFVQqKG1BqBKtjwSaxCYGQ0LSJE02m5hkH+4GWls89YP/n4H5Pr6ZYQCOCeQwf+XWHCPhTUrcrYvzSy8bi9fOEkZ9finS2efh+4kRueHhCWujdr3cTCh3ZkPbQ6NTAw6OW9dm/I+R8DPF4KDGZ0DTNLQl5v3VSnZSbtSu9rLUXZpUrnA87YVzC10ng3fg8OLhzUAmnrjQVFFf3+AQUGYCfu8WqVazeqpRb/t1buyIQG51BJLlBWdvPxI8PQY0bYX8z+9IJZsUOqX86H+CsdAlkjSZTWKtDuVyEXAzCYHJ84Bo06gsNfXlPDAM/rWk4FRN1ZCqjefB5ekH0kKBmeEAJfDUH0lKddmHBcnNt4qVd6sOlxccbhcQoEEll4FCepsopGIHs3YTLfqUfLT4ZCpX2Ah6T4zA9MxFMBE5iH/agFJ2R2AZ24S+xQ8IgqhdwebXLXunIwu/snk6ky+DPgswFAGxyEdgLUQPz9s9kHxtrLbVFTRFUulhzG0nZ4W2LEM9v6NXULBgKphwwDAEQt8i0YDuEsWMYZZnb7R+FBNemmbGhTPj1pPBEfD4BgEIM0h1CcFRrK8s7n2JvluNdx2QcFh5tbyw4sRMHrfXd9lmt+OKqmlb6RK+9jlBsBRRZW1smkPF9pHju6efivv+bWaAtGAmO6c+f7+Orb1ZxWstqZ2pwp7ejKa/4+EvKL7YFtbH6bAAAAAASUVORK5CYII="
 
           for attempt in $(seq 1 10); do
             status=$(curl --silent --show-error --output /tmp/space-ready.json --write-out "%{http_code}" --max-time 90 "$READY_URL" || true)
-            if [ "$status" = "200" ]; then
+            if [ "$status" != "200" ]; then
+              echo "Dog model is not ready yet (HTTP $status, attempt $attempt/10)."
+              sleep 60
+              continue
+            fi
+
+            cat_status=$(curl --silent --show-error --output /tmp/cat-ready.json --write-out "%{http_code}" --max-time 90 \
+              --request POST "$CAT_PREDICT_URL" \
+              --header "Content-Type: application/json" \
+              --data "{\"species\":\"cat\",\"topK\":1,\"imageDataUrl\":\"$CAT_TEST_IMAGE\"}" || true)
+            if [ "$cat_status" = "200" ]; then
               cat /tmp/space-ready.json
+              cat /tmp/cat-ready.json
               exit 0
             fi
 
-            echo "Space is not ready yet (HTTP $status, attempt $attempt/10)."
+            echo "Cat model is not ready yet (HTTP $cat_status, attempt $attempt/10)."
             sleep 60
           done
 
